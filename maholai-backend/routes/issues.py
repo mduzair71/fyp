@@ -1,3 +1,4 @@
+
 # from utils.scope import has_scope_access, scoped_issue_query as scoped_issues
 
 # from fastapi import APIRouter, HTTPException, File, UploadFile, Form, Depends, Request
@@ -8,6 +9,7 @@
 # from routes.auth import require_admin, get_current_user, log_audit_action
 # from models.issue import CATEGORY_DEPARTMENT_MAP
 # from utils.scope import has_scope_access, scoped_issue_query
+# from utils.ai_analyzer import analyze_issue  
 # from utils.uploads import validate_upload
 # # from ai import (
 # #     classify_text,
@@ -222,18 +224,18 @@
 # async def create_issue(
 #     request: Request,
 #     category: str = Form(...),
-#     # problem_type: str = Form(...),
+#     problem_type: str = Form(None),
 #     title: str = Form(...),
 #     description: str = Form(...),
 #     location_area: str = Form(...),
 #     location_district: str = Form(...),
 #     location_latitude: float = Form(None),
 #     location_longitude: float = Form(None),
-#     # additional_info: str = Form(None),
+#     additional_info: str = Form(None),
 #     location_landmark: str = Form(None),
-#     # occurred_date: str = Form(None),
-#     # frequency: str = Form(None),
-#     # severity_level: str = Form(None),
+#     occurred_date: str = Form(None),
+#     frequency: str = Form(None),
+#     severity_level: str = Form(None),
 #     is_anonymous: str = Form("false"),
 #     created_by: str = Form(...),
 #     # confirm_duplicate: str = Form("false"),
@@ -277,7 +279,7 @@
 
 #         issue_data = {
 #             "category": category,
-#             # "problem_type": problem_type,
+#             "problem_type": problem_type,
 #             "title": title,
 #             "description": description,
 #             "location": {
@@ -287,10 +289,10 @@
 #                 "longitude": location_longitude,
 #                 "landmark": location_landmark,
 #             },
-#             # "additional_info": additional_info,
-#             # "occurred_date": occurred_date,
-#             # "frequency": frequency,
-#             # "severity_level": severity_level,
+#             "additional_info": additional_info,
+#             "occurred_date": occurred_date,
+#             "frequency": frequency,
+#             "severity_level": severity_level,
 #             "is_anonymous": anonymous,
 #             "created_by": created_by,
 #             "reporter_name": None if anonymous else reporter.get("name"),
@@ -307,6 +309,9 @@
 #             "is_deleted": False,
 #             "created_at": datetime.utcnow(),
 #         }
+#         ai_result = analyze_issue(title, description, f"{location_area}, {location_district}")
+#             issue_data["summary"] = ai_result["summary"]
+#             issue_data["priority"] = ai_result["priority"]
 
 #         if file and file.filename:
 #             content = await file.read()
@@ -816,25 +821,15 @@
 #         "result": "Likely Resolved" if confidence >= 70 else "Needs Review",
 #     }
 
-from utils.scope import has_scope_access, scoped_issue_query as scoped_issues
-
 from fastapi import APIRouter, HTTPException, File, UploadFile, Form, Depends, Request
-# from database import issues_collection, users_collection
 from database import issues_collection, users_collection, notifications_collection
 from bson import ObjectId
-# from ai_analyzer import analyze_issue
+
 from routes.auth import require_admin, get_current_user, log_audit_action
 from models.issue import CATEGORY_DEPARTMENT_MAP
 from utils.scope import has_scope_access, scoped_issue_query
+from utils.ai_analyzer import analyze_issue
 from utils.uploads import validate_upload
-# from ai import (
-#     classify_text,
-#     compute_priority,
-#     find_duplicate_candidates,
-#     build_clusters,
-#     detect_from_filename,
-# )
-# from ai.duplicates import recent_nearby_query
 from utils.issue_helpers import (
     identify_viewer,
     serialize_issue,
@@ -853,7 +848,12 @@ from datetime import datetime
 router = APIRouter()
 
 
-# Level 1 Statuses
+# =====================================================================
+# LEVEL 1 STATUS SYSTEM
+# The full lifecycle an issue can move through, and which transitions
+# are legal from each status. Sub Admin status updates are validated
+# against STATUS_TRANSITIONS in update_issue_status() below.
+# =====================================================================
 ALLOWED_STATUSES = {
     "PENDING", "IN_PROGRESS", "RESOLVED", "REJECTED"
 }
@@ -862,49 +862,27 @@ STATUS_TRANSITIONS = {
     "PENDING": {"IN_PROGRESS", "REJECTED"},
     "IN_PROGRESS": {"RESOLVED", "REJECTED"},
     "RESOLVED": set(),
-    "REJECTED": set()
+    "REJECTED": set(),
 }
 
-# Original Statuses
-# ALLOWED_STATUSES = {
-#     "pending",
-#     "under_review",
-#     "assigned",
-#     "in_progress",
-#     "resolution_submitted",
-#     "community_verification",
-#     "resolved",
-#     "rejected",
-#     "invalid",
-#     "duplicate",
-#     "reopened",
-# }
 
-# STATUS_TRANSITIONS = {
-#     "pending": {"under_review", "assigned", "in_progress", "rejected", "invalid", "duplicate"},
-#     "under_review": {"assigned", "in_progress", "rejected", "invalid", "duplicate"},
-#     "assigned": {"in_progress", "rejected"},
-#     "in_progress": {"resolution_submitted", "resolved", "rejected"},
-#     "resolution_submitted": {"community_verification", "in_progress", "resolved"},
-#     "community_verification": {"resolved", "reopened", "in_progress"},
-#     "resolved": {"reopened"},
-#     "reopened": {"in_progress", "under_review"},
-#     "rejected": {"reopened", "pending"},
-#     "invalid": set(),
-#     "duplicate": set(),
-# }
-
+# =====================================================================
+# HELPERS
+# =====================================================================
 
 def serialize_issue(issue: dict) -> dict:
+    """Converts Mongo-specific types (ObjectId, datetime) to strings so an
+    issue document can be safely returned as JSON."""
     issue["_id"] = str(issue["_id"])
     if issue.get("created_at"):
         issue["created_at"] = str(issue["created_at"])
-    # issue["support_count"] = len(issue.get("supports") or [])
     return issue
 
 
-
 def strip_reporter_info_if_needed(issue: dict, viewer: dict):
+    """Removes the reporter's name/CNIC/phone from an issue unless the
+    viewer is the reporter themselves, a Super Admin, or a Sub Admin whose
+    scope covers this issue."""
     role = viewer.get("role")
     user_id = viewer.get("user_id")
     is_owner = user_id is not None and user_id == issue.get("created_by")
@@ -916,6 +894,9 @@ def strip_reporter_info_if_needed(issue: dict, viewer: dict):
 
 
 def identify_viewer(request: Request) -> dict:
+    """Like get_current_user, but never raises -- returns an empty dict for
+    anonymous/invalid-token visitors instead of a 401, since public GET
+    endpoints need to work for logged-out visitors too."""
     if not request.cookies.get("token"):
         return {}
     try:
@@ -927,115 +908,19 @@ def identify_viewer(request: Request) -> dict:
         return {}
 
 
-# def notify(user_id: str, title: str, message: str, issue_id: str | None = None):
-#     if not user_id:
-#         return
-#     try:
-#         notifications_collection.insert_one({
-#             "user_id": str(user_id),
-#             "title": title,
-#             "message": message,
-#             "issue_id": issue_id,
-#             "read": False,
-#             "created_at": datetime.utcnow(),
-#         })
-#     except Exception as e:
-#         print(f"Notification insert failed: {e}")
-
-
-# def apply_ai(issue_data: dict, filename: str | None = None) -> dict:
-#     analysis = analyze_issue(
-#         title=issue_data["title"],
-#         description=issue_data["description"],
-#         location=f"{issue_data.get('location_area')}, {issue_data.get('location_district')}",
-#     )
-#     nlp = classify_text(issue_data["title"], issue_data["description"])
-#     image_ai = detect_from_filename(filename, issue_data.get("category"))
-#     priority = compute_priority(
-#         severity=issue_data.get("severity_level") or analysis.get("priority"),
-#         safety_risk=nlp.get("safety_risk", False),
-#         support_count=0,
-#         has_evidence=bool(issue_data.get("photo_url")),
-#         frequency=issue_data.get("frequency"),
-#         ai_priority=analysis.get("priority"),
-#     )
-#     issue_data["summary"] = analysis.get("summary") or issue_data["description"]
-#     issue_data["priority"] = priority["priority"]
-#     issue_data["priority_score"] = priority["priority_score"]
-#     issue_data["priority_level"] = priority["priority_level"]
-#     issue_data["ai_category"] = nlp.get("ai_category")
-#     issue_data["ai_confidence"] = nlp.get("ai_confidence")
-#     issue_data["ai_severity"] = analysis.get("priority")
-#     issue_data["ai_department_recommendation"] = CATEGORY_DEPARTMENT_MAP.get(
-#         issue_data.get("category"), "General Admin"
-#     )
-#     issue_data["safety_risk"] = nlp.get("safety_risk", False)
-#     issue_data.update(image_ai)
-#     return issue_data
-
-
-# def duplicate_payload(issue: dict) -> dict:
-#     return {
-#         "category": issue.get("category"),
-#         "title": issue.get("title"),
-#         "description": issue.get("description"),
-#         "location_area": issue.get("location_area"),
-#         "location_district": issue.get("location_district"),
-#         "location_latitude": issue.get("location_latitude"),
-#         "location_longitude": issue.get("location_longitude"),
-#     }
-
-
-# def find_duplicates_for(payload: dict) -> list:
-#     query = recent_nearby_query(payload)
-#     existing = list(issues_collection.find(query).limit(80))
-#     matches = find_duplicate_candidates(existing, payload)
-#     out = []
-#     for item in matches:
-#         out.append({
-#             "_id": str(item["_id"]),
-#             "title": item.get("title"),
-#             "category": item.get("category"),
-#             "location_area": item.get("location_area"),
-#             "status": item.get("status"),
-#             "support_count": len(item.get("supports") or []),
-#             "similarity": item.get("similarity"),
-#         })
-#     return out
-
-
 def scoped_issues(viewer: dict):
+    """Builds the Mongo query for GET /issues: everyone gets non-deleted
+    issues, and Sub Admins get it further narrowed to their assigned
+    category/area/district via scoped_issue_query()."""
     query = {"is_deleted": {"$ne": True}}
     if viewer.get("role") == "sub_admin":
         query.update(scoped_issue_query(viewer))
     return query
 
 
-# @router.post("/issues/check-duplicates")
-# async def check_duplicates(
-#     category: str = Form(...),
-#     title: str = Form(...),
-#     description: str = Form(...),
-#     location_area: str = Form(...),
-#     location_district: str = Form(...),
-#     location_latitude: float = Form(None),
-#     location_longitude: float = Form(None),
-# ):
-#     payload = {
-#         "category": category,
-#         "title": title,
-#         "description": description,
-#         "location_area": location_area,
-#         "location_district": location_district,
-#         "location_latitude": location_latitude,
-#         "location_longitude": location_longitude,
-#     }
-#     matches = find_duplicates_for(payload)
-#     return {"total": len(matches), "data": matches}
-
-
-
-
+# =====================================================================
+# CREATE ISSUE  (citizen reports a new civic issue)
+# =====================================================================
 @router.post("/issues")
 async def create_issue(
     request: Request,
@@ -1054,7 +939,6 @@ async def create_issue(
     severity_level: str = Form(None),
     is_anonymous: str = Form("false"),
     created_by: str = Form(...),
-    # confirm_duplicate: str = Form("false"),
     file: UploadFile = File(None),
 ):
     try:
@@ -1065,23 +949,6 @@ async def create_issue(
         viewer = identify_viewer(request)
         if viewer.get("user_id") and viewer["user_id"] != created_by:
             raise HTTPException(status_code=403, detail="You can only report issues as yourself")
-
-        # payload = duplicate_payload({
-        #     "category": category,
-        #     "title": title,
-        #     "description": description,
-        #     "location_area": location_area,
-        #     "location_district": location_district,
-        #     "location_latitude": location_latitude,
-        #     "location_longitude": location_longitude,
-        # })
-        # duplicates = find_duplicates_for(payload)
-        # if duplicates and confirm_duplicate.lower() != "true":
-        #     return {
-        #         "possible_duplicate": True,
-        #         "message": "Similar civic issues already exist nearby",
-        #         "duplicates": duplicates,
-        #     }
 
         initial_status = "PENDING"
         status_timeline_entry = {
@@ -1119,12 +986,16 @@ async def create_issue(
             "resolution_photo_url": None,
             "status": initial_status,
             "status_history": [status_timeline_entry],
-            # "supports": [],
-            # "comments": [],
-            # "community_votes": {},
             "is_deleted": False,
             "created_at": datetime.utcnow(),
         }
+
+        # AI summary + priority classification (Claude). Never blocks issue
+        # creation -- analyze_issue() falls back safely on any AI failure.
+        ai_result = analyze_issue(title, description, f"{location_area}, {location_district}")
+        issue_data["summary"] = ai_result["summary"]
+        issue_data["priority"] = ai_result["priority"]
+        
 
         if file and file.filename:
             content = await file.read()
@@ -1139,22 +1010,8 @@ async def create_issue(
                 buffer.write(content)
             issue_data["photo_url"] = file_path
 
-        # apply_ai(issue_data, file.filename if file else None)
-        # issue_data["status_history"].append({
-        #     "status": "ai_analyzed",
-        #     "updated_at": datetime.utcnow(),
-        #     "updated_by": "system",
-        #     "note": f"AI classified as {issue_data.get('ai_category')} ({issue_data.get('ai_confidence')})",
-        # })
-
         result = issues_collection.insert_one(issue_data)
         inserted_issue = issues_collection.find_one({"_id": result.inserted_id})
-        # notify(
-        #     created_by,
-        #     "Issue Submitted",
-        #     f"Your report “{title}” was received and analyzed.",
-        #     str(result.inserted_id),
-        # )
         return {"message": "Issue reported successfully", "possible_duplicate": False, "data": serialize_issue(inserted_issue)}
     except HTTPException:
         raise
@@ -1162,6 +1019,10 @@ async def create_issue(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+# =====================================================================
+# LIST ISSUES  (scoped by role: public sees all, Sub Admin sees only
+# their assigned category/area/district)
+# =====================================================================
 @router.get("/issues")
 def get_all_issues(request: Request):
     try:
@@ -1177,6 +1038,9 @@ def get_all_issues(request: Request):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+# =====================================================================
+# GEO / HEATMAP / CLUSTERS  (map & analytics views, scoped same as above)
+# =====================================================================
 @router.get("/issues/geo")
 def get_geo_issues(request: Request):
     viewer = identify_viewer(request)
@@ -1240,6 +1104,9 @@ def get_clusters(request: Request):
     return {"total": len(issues), "data": build_clusters(issues)}
 
 
+# =====================================================================
+# ANALYTICS  (admin-only dashboard summary numbers)
+# =====================================================================
 @router.get("/analytics")
 def get_analytics(request: Request, admin=Depends(require_admin)):
     query = scoped_issues(admin)
@@ -1294,6 +1161,9 @@ def get_analytics(request: Request, admin=Depends(require_admin)):
     }
 
 
+# =====================================================================
+# CITIZEN'S OWN ISSUES  ("My Reports" page)
+# =====================================================================
 @router.get("/issues/user/{user_id}")
 def get_issues_by_user(user_id: str, request: Request):
     try:
@@ -1317,6 +1187,9 @@ def get_issues_by_user(user_id: str, request: Request):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+# =====================================================================
+# NOTIFICATIONS  (in-app notification list for the logged-in user)
+# =====================================================================
 @router.get("/notifications")
 def list_notifications(current_user=Depends(get_current_user)):
     items = []
@@ -1327,6 +1200,9 @@ def list_notifications(current_user=Depends(get_current_user)):
     return {"total": len(items), "data": items}
 
 
+# =====================================================================
+# SINGLE ISSUE DETAILS
+# =====================================================================
 @router.get("/issues/{issue_id}")
 def get_issue(issue_id: str, request: Request):
     try:
@@ -1345,6 +1221,10 @@ def get_issue(issue_id: str, request: Request):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+# =====================================================================
+# UPDATE ISSUE STATUS  (Sub Admin / Super Admin only, scope-checked,
+# transition-validated against STATUS_TRANSITIONS above)
+# =====================================================================
 @router.patch("/issues/{issue_id}/status")
 def update_issue_status(
     issue_id: str,
@@ -1395,79 +1275,10 @@ def update_issue_status(
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-# @router.patch("/issues/{issue_id}/status")
-# def update_issue_status(
-#     issue_id: str,
-#     status: str = Form(...),
-#     note: str = Form(None),
-#     admin=Depends(require_admin),
-# ):
-#     try:
-#         if status not in ALLOWED_STATUSES:
-#             raise HTTPException(status_code=400, detail=f"Invalid status. Must be one of {sorted(ALLOWED_STATUSES)}")
-#         issue = issues_collection.find_one({"_id": ObjectId(issue_id), "is_deleted": {"$ne": True}})
-#         if not issue:
-#             raise HTTPException(status_code=404, detail="Issue not found")
-#         if not has_scope_access(admin, issue):
-#             raise HTTPException(status_code=403, detail="Not authorized for this department/area")
-#         current = issue.get("status") or "PENDING"
-#         allowed = STATUS_TRANSITIONS.get(current, set())
-#         if status not in allowed and status != current:
-#             raise HTTPException(status_code=400, detail=f"Transition from {current} to {status} is not allowed.")
 
-#         update_data = {"status": status}
-#         timeline_entry = {
-#             "status": status,
-#             "updated_at": datetime.utcnow(),
-#             "updated_by": admin["user_id"],
-#             "note": note,
-#         }
-#         issues_collection.update_one(
-#             {"_id": ObjectId(issue_id)},
-#             {"$set": update_data, "$push": {"status_history": timeline_entry}},
-#         )
-#         log_audit_action(admin["user_id"], "update_status", issue_id, {"status": status, "note": note})
-#         # notify(
-#         #     issue.get("created_by"),
-#         #     f"Status of “{issue.get('title')}” Updated",
-#         #     f"The status of your issue has been updated to {status}.",
-#         #     issue_id,
-#         # )
-#         return {"message": "Issue status updated successfully"}
-#     except HTTPException:
-#         raise
-#     except Exception as e:
-#         raise HTTPException(status_code=500, detail=str(e))
-#             raise HTTPException(status_code=422, detail=f"Cannot change status from {current} to {status}")
-#         history_entry = {
-#             "status": status,
-#             "updated_at": datetime.utcnow(),
-#             "updated_by": admin.get("user_id"),
-#             "note": note or f"Status changed to {status}",
-#         }
-#         issues_collection.update_one(
-#             {"_id": ObjectId(issue_id)},
-#             {"$set": {"status": status}, "$push": {"status_history": history_entry}},
-#         )
-#         log_audit_action(
-#             performed_by=admin.get("user_id"),
-#             role=admin.get("role"),
-#             action="STATUS_UPDATE",
-#             target_type="issue",
-#             target_id=issue_id,
-#             previous_val={"status": current},
-#             new_val={"status": status},
-#         )
-#         notify(issue.get("created_by"), "Status Changed", f"Issue “{issue.get('title')}” is now {status}.", issue_id)
-#         if status in ("resolved", "resolution_submitted", "community_verification"):
-#             notify(issue.get("created_by"), "Community Verification Required", "Please confirm whether this issue is actually resolved.", issue_id)
-#         return {"message": "Status & Timeline updated successfully", "status": status}
-#     except HTTPException:
-#         raise
-#     except Exception as e:
-#         raise HTTPException(status_code=500, detail=str(e))
-
-
+# =====================================================================
+# DELETE ISSUE  (soft delete -- Sub Admin / Super Admin only, scope-checked)
+# =====================================================================
 @router.delete("/issues/{issue_id}")
 def delete_issue(issue_id: str, admin=Depends(require_admin)):
     try:
@@ -1496,6 +1307,9 @@ def delete_issue(issue_id: str, admin=Depends(require_admin)):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+# =====================================================================
+# SUPPORT AN ISSUE  (citizen "I'm affected too" toggle)
+# =====================================================================
 @router.post("/issues/{issue_id}/support")
 def support_issue(issue_id: str, current_user=Depends(get_current_user)):
     try:
@@ -1525,6 +1339,9 @@ def support_issue(issue_id: str, current_user=Depends(get_current_user)):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+# =====================================================================
+# COMMENTS  (citizen/admin discussion thread on an issue)
+# =====================================================================
 @router.post("/issues/{issue_id}/comments")
 def add_comment(issue_id: str, message: str = Form(...), current_user=Depends(get_current_user)):
     issue = issues_collection.find_one({"_id": ObjectId(issue_id), "is_deleted": {"$ne": True}})
@@ -1546,6 +1363,13 @@ def add_comment(issue_id: str, message: str = Form(...), current_user=Depends(ge
     return {"message": "Comment added", "data": comment}
 
 
+# =====================================================================
+# COMMUNITY VERIFICATION  (NOT part of Level 1 -- uses statuses outside
+# ALLOWED_STATUSES like "resolution_submitted"/"community_verification"/
+# "reopened". Left as-is per your request not to change working code,
+# but flagged: calling this will write a status your Level 1
+# ALLOWED_STATUSES/STATUS_TRANSITIONS don't recognize.)
+# =====================================================================
 @router.post("/issues/{issue_id}/verify")
 def verify_resolution(issue_id: str, resolved: str = Form(...), current_user=Depends(get_current_user)):
     issue = issues_collection.find_one({"_id": ObjectId(issue_id), "is_deleted": {"$ne": True}})
@@ -1586,6 +1410,11 @@ def verify_resolution(issue_id: str, resolved: str = Form(...), current_user=Dep
     return {"message": "Verification recorded", "vote": vote, "yes": yes, "no": no, "status": new_status}
 
 
+# =====================================================================
+# RESOLUTION EVIDENCE UPLOAD  (NOT part of Level 1 -- writes status
+# "resolution_submitted" which is outside ALLOWED_STATUSES. Left as-is
+# per your request, same flag as verify_resolution above.)
+# =====================================================================
 @router.post("/issues/{issue_id}/resolution-evidence")
 async def upload_resolution_evidence(
     issue_id: str,
