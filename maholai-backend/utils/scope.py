@@ -45,7 +45,7 @@ def scoped_issue_query(admin: dict) -> dict:
     if scope["categories"]:
         query["category"] = {"$in": scope["categories"]}
     if scope["areas"]:
-        query["location_area"] = {"$in": scope["areas"]}
+        query["location.area"] = {"$in": scope["areas"]}
     if scope["districts"]:
-        query["location_district"] = {"$in": scope["districts"]}
+        query["location.district"] = {"$in": scope["districts"]}
     return query

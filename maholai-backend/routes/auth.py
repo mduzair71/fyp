@@ -102,16 +102,20 @@
 #         if existing_user:
 #             raise HTTPException(status_code=400, detail="CNIC already registered")
 
-#         hashed_password_bytes = bcrypt.hashpw(user.password.encode('utf-8'), bcrypt.gensalt())
-#         hashed_password_str = base64.b64encode(hashed_password_bytes).decode('utf-8')
+#         # Hashed password (original with base64)
+        # hashed_password_bytes = bcrypt.hashpw(user.password.encode('utf-8'), bcrypt.gensalt())
+        # hashed_password_str = base64.b64encode(hashed_password_bytes).decode('utf-8')
+
+        # Simplified hashed password
+#         hashed_password = bcrypt.hashpw(user.password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
 
 #         # Strictly force citizen role and null admin fields
 #         user_data = {
 #             "name": user.name,
 #             "email": user.email,
-#             "password": hashed_password_str,
-#             "cnic": user.cnic,
-#             "phone": user.phone,
+#             "password": hashed_password,
+# #             "cnic": user.cnic,
+# #             "phone": user.phone,
 #             "date_of_birth": user.date_of_birth,
 #             "address": user.address,
 #             "role": "citizen",
@@ -149,13 +153,17 @@
 #         if existing:
 #             raise HTTPException(status_code=400, detail="CNIC already registered")
 
-#         hashed_password_bytes = bcrypt.hashpw(admin.password.encode('utf-8'), bcrypt.gensalt())
-#         hashed_password_str = base64.b64encode(hashed_password_bytes).decode('utf-8')
+#         # Hashed password (original with base64)
+        # hashed_password_bytes = bcrypt.hashpw(admin.password.encode('utf-8'), bcrypt.gensalt())
+        # hashed_password_str = base64.b64encode(hashed_password_bytes).decode('utf-8')
 
-#         admin_data = {
-#             "name": admin.name,
-#             "email": admin.email,
-#             "password": hashed_password_str,
+        # Simplified hashed password
+        # hashed_password = bcrypt.hashpw(admin.password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+
+        # admin_data = {
+        #     "name": admin.name,
+        #     "email": admin.email,
+        #     "password": hashed_password,
 #             "cnic": admin.cnic,
 #             "role": "sub_admin",
 #             "department": admin.department,

@@ -10,6 +10,7 @@ export default function AdminLoginPage() {
     cnic: '',
     password: ''
   });
+  const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -34,12 +35,15 @@ export default function AdminLoginPage() {
 
       if (response.ok) {
         const role = result.role;
-        if (role !== 'sub_admin' && role !== 'admin') {
-          setError('Access Denied — This portal is strictly for Departmental Sub Administrators.');
+
+        // Strictly block normal public citizens
+        if (role !== 'sub_admin' && role !== 'admin' && role !== 'super_admin') {
+          setError('Access Denied — Public users cannot login here.');
           setLoading(false);
           return;
         }
 
+        // Store session data
         localStorage.setItem('user_id', result.user_id);
         localStorage.setItem('name', result.name);
         localStorage.setItem('user_name', result.name);
@@ -48,113 +52,108 @@ export default function AdminLoginPage() {
         if (result.district)   localStorage.setItem('district', result.district);
         if (result.area)       localStorage.setItem('area', result.area);
 
-        router.push('/admin/dashboard');
+        // Redirect based on role
+        if (role === 'super_admin') {
+          router.push('/super-admin/dashboard');
+        } else {
+          router.push('/admin/dashboard');
+        }
       } else {
-        setError(result.detail || 'Login failed. Please check your credentials.');
+        setError(result.detail || 'Login failed. Invalid CNIC or password.');
       }
     } catch (err) {
-      setError('Connection error. Please ensure backend server is running.');
+      setError('Cannot connect to server. Please ensure backend is running.');
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-emerald-950 via-green-900 to-emerald-900 text-white flex flex-col justify-between font-['Inter',sans-serif]">
+    <div className="min-h-screen w-full flex items-center justify-center bg-gradient-to-br from-emerald-950 via-green-950 to-emerald-900 px-4 py-10">
+      <div className="w-full max-w-sm bg-white rounded-2xl shadow-2xl px-7 py-8">
 
-      {/* Top Header */}
-      <div className="p-6 flex justify-between items-center max-w-7xl mx-auto w-full">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-white text-emerald-900 flex items-center justify-center font-black text-xl shadow-lg">
-            🇵🇰
+        {/* Logo */}
+        <div className="flex flex-col items-center mb-5">
+          <div className="w-16 h-16 rounded-full border-2 border-emerald-500 flex items-center justify-center text-3xl mb-2">
+            🏛️
           </div>
-          <div>
-            <span className="font-extrabold text-xl tracking-tight text-white">Mahol<span className="text-emerald-400">AI</span></span>
-            <p className="text-emerald-300 text-xs font-semibold uppercase tracking-wider">Departmental Portal</p>
-          </div>
+          <span className="font-extrabold text-sm tracking-wide text-gray-900">MAHOL<span className="text-emerald-600">AI</span></span>
+          <span className="text-[10px] text-gray-400 tracking-wide font-semibold uppercase">Departmental Portal</span>
         </div>
-        <Link href="/" className="text-emerald-200 hover:text-white text-sm font-medium transition-colors no-underline flex items-center gap-1">
-          ← Citizen Portal
-        </Link>
-      </div>
 
-      {/* Login Form Container */}
-      <div className="flex-1 flex items-center justify-center px-4 py-8">
-        <div className="max-w-md w-full bg-emerald-900/60 backdrop-blur-xl border border-emerald-500/30 rounded-3xl p-8 shadow-2xl shadow-emerald-950/80">
+        <h1 className="text-xl font-bold text-gray-900 text-center mb-1">Admin Portal</h1>
+        <p className="text-gray-500 text-xs text-center mb-5">Authorized personnel login only.</p>
 
-          <div className="text-center mb-8">
-            <div className="w-14 h-14 bg-emerald-800/80 border border-emerald-400/30 rounded-2xl flex items-center justify-center mx-auto mb-4 text-2xl shadow-inner">
-              🏛️
-            </div>
-            <h1 className="text-2xl font-bold text-white tracking-tight">Sub Admin Login</h1>
-            <p className="text-emerald-200 text-sm mt-1">Access your assigned Department & Area dashboard</p>
+        {error && (
+          <div className="bg-red-50 border-l-4 border-red-400 px-3 py-2 mb-4 rounded-lg">
+            <p className="text-red-600 text-xs font-medium">{error}</p>
+          </div>
+        )}
+
+        <form onSubmit={handleSubmit} className="space-y-3">
+
+          {/* CNIC / Username */}
+          <div className="relative">
+            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm">🪪</span>
+            <input
+              type="text"
+              name="cnic"
+              autoComplete="off"
+              value={formData.cnic}
+              onChange={handleChange}
+              required
+              placeholder="CNIC / Official Username"
+              className="w-full pl-9 pr-3 py-2.5 bg-white border border-gray-200 rounded-lg text-sm text-gray-900 placeholder-gray-400 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-200 focus:outline-none transition-all"
+            />
           </div>
 
-          {error && (
-            <div className="mb-6 bg-red-950/80 border-l-4 border-red-500 p-4 rounded-xl text-red-200 text-xs font-medium flex items-start gap-2 shadow-sm">
-              <span className="text-base">⚠️</span>
-              <span>{error}</span>
-            </div>
-          )}
-
-          <form onSubmit={handleSubmit} className="space-y-5">
-            <div>
-              <label className="block text-xs font-bold uppercase tracking-wider text-emerald-200 mb-2">
-                CNIC Number
-              </label>
-              <input
-                type="text"
-                name="cnic"
-                value={formData.cnic}
-                onChange={handleChange}
-                required
-                placeholder="12345-1234567-1"
-                className="w-full px-4 py-3 bg-emerald-950/80 border border-emerald-500/40 rounded-xl text-sm text-white placeholder-emerald-400/60 focus:outline-none focus:border-emerald-400 focus:ring-1 focus:ring-emerald-400 transition-all font-mono"
-              />
-            </div>
-
-            <div>
-              <label className="block text-xs font-bold uppercase tracking-wider text-emerald-200 mb-2">
-                Password
-              </label>
-              <input
-                type="password"
-                name="password"
-                value={formData.password}
-                onChange={handleChange}
-                required
-                placeholder="••••••••"
-                className="w-full px-4 py-3 bg-emerald-950/80 border border-emerald-500/40 rounded-xl text-sm text-white placeholder-emerald-400/60 focus:outline-none focus:border-emerald-400 focus:ring-1 focus:ring-emerald-400 transition-all"
-              />
-            </div>
-
+          {/* Password */}
+          <div className="relative">
+            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm">🔒</span>
+            <input
+              type={showPassword ? 'text' : 'password'}
+              name="password"
+              autoComplete="off"
+              value={formData.password}
+              onChange={handleChange}
+              required
+              placeholder="Password"
+              className="w-full pl-9 pr-9 py-2.5 bg-white border border-gray-200 rounded-lg text-sm text-gray-900 placeholder-gray-400 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-200 focus:outline-none transition-all"
+            />
             <button
-              type="submit"
-              disabled={loading}
-              className={`w-full py-3.5 rounded-xl font-bold text-sm tracking-wide transition-all shadow-lg border-0 ${
-                loading
-                  ? 'bg-emerald-800/50 text-emerald-400 cursor-not-allowed'
-                  : 'bg-emerald-500 hover:bg-emerald-400 text-emerald-950 cursor-pointer shadow-emerald-500/20 hover:shadow-emerald-500/40 hover:-translate-y-[1px]'
-              }`}
+              type="button"
+              onClick={() => setShowPassword(!showPassword)}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 text-sm bg-transparent border-0 cursor-pointer"
             >
-              {loading ? 'Authenticating Department Scope...' : 'Login to Department Dashboard →'}
+              {showPassword ? '🙈' : '👁️'}
             </button>
-          </form>
-
-          <div className="mt-8 pt-6 border-t border-emerald-500/20 text-center">
-            <p className="text-emerald-300/80 text-xs">
-              Sub Admin accounts are issued exclusively by the Super Admin.
-            </p>
           </div>
 
+          <button
+            type="submit"
+            disabled={loading}
+            className={`w-full py-3 rounded-lg text-sm font-bold tracking-wide uppercase transition-all border-0 mt-2 ${
+              loading
+                ? 'bg-emerald-300 text-white cursor-not-allowed'
+                : 'bg-emerald-800 hover:bg-emerald-900 text-white cursor-pointer shadow-md'
+            }`}
+          >
+            {loading ? 'Authenticating...' : 'Login to Dashboard'}
+          </button>
+
+        </form>
+
+        <p className="text-center text-gray-400 text-[11px] mt-4">
+          Sub-Admin accounts are strictly issued by the Super Admin.
+        </p>
+
+        <div className="text-center mt-3 pt-3 border-t border-gray-100">
+          <Link href="/login" className="text-emerald-700 text-xs font-medium no-underline hover:underline">
+            ← Switch to Citizen Portal
+          </Link>
         </div>
-      </div>
 
-      {/* Footer */}
-      <div className="p-6 text-center text-emerald-400/60 text-xs">
-        © 2026 MaholAI Civic System · Government Department Portal
       </div>
-
     </div>
   );
 }
