@@ -108,6 +108,8 @@ export default function ReportPage() {
   const [preview, setPreview] = useState(null);
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
+  
+  const [duplicateInfo, setDuplicateInfo] = useState(null); // { possible_duplicate, message } ya null 
   const [error, setError] = useState('');
   const [gpsLoading, setGpsLoading] = useState(false);
 
@@ -204,10 +206,17 @@ export default function ReportPage() {
       form.append('created_by', userId);
       if (file) form.append('file', file);
 
-      await axios.post('http://localhost:8000/issues', form, {
+            const res = await axios.post('http://localhost:8000/issues', form, {
         headers: { 'Content-Type': 'multipart/form-data' },
         withCredentials: true,
       });
+
+      setDuplicateInfo({
+        isDuplicate: res.data.possible_duplicate,
+        message: res.data.message,
+        reportCount: res.data.data?.report_count,
+      });
+      setSuccess(true);
 
       setSuccess(true);
       setCategory('');
@@ -243,16 +252,28 @@ export default function ReportPage() {
     !loading && category && formData.problem_type && formData.title && formData.description && formData.location_area;
 
   if (success) {
+    const isDup = duplicateInfo?.isDuplicate;
     return (
       <div className="min-h-screen w-full bg-slate-50 flex items-center justify-center px-4">
         <div className="max-w-md w-full text-center bg-white border border-gray-100 rounded-2xl shadow-sm px-8 py-12 animate-pop-in">
-          <div className="w-16 h-16 mx-auto rounded-full bg-blue-50 border border-blue-100 flex items-center justify-center mb-5 animate-check-in">
-            <IconShieldCheck className="w-8 h-8 text-blue-600" />
+          <div className={`w-16 h-16 mx-auto rounded-full border flex items-center justify-center mb-5 animate-check-in ${
+            isDup ? 'bg-amber-50 border-amber-100' : 'bg-blue-50 border-blue-100'
+          }`}>
+            <IconShieldCheck className={`w-8 h-8 ${isDup ? 'text-amber-600' : 'text-blue-600'}`} />
           </div>
-          <h2 className="text-2xl font-bold text-gray-900 mb-2">Issue Reported!</h2>
+          <h2 className="text-2xl font-bold text-gray-900 mb-2">
+            {isDup ? 'Already Reported!' : 'Issue Reported!'}
+          </h2>
           <p className="text-sm text-gray-500 leading-relaxed">
-            AI ne aapki report analyze kar li. Local admin ko notify kar diya gaya hai.
+            {isDup
+              ? 'Yeh issue pehle se hi kisi aur ne report kiya hua hai. Aapki report usi ke saath add kar di gayi hai.'
+              : "AI ne aapki report analyze kar li. Local admin ko notify kar diya gaya hai."}
           </p>
+          {isDup && duplicateInfo?.reportCount && (
+            <div className="mt-4 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-amber-50 border border-amber-200 text-amber-700 text-xs font-semibold">
+              👥 {duplicateInfo.reportCount} people ne yeh issue report kiya hai
+            </div>
+          )}
           <p className="text-xs text-gray-400 mt-4 mb-6">Redirecting to issues page...</p>
           <Link
             href="/issues"
@@ -264,7 +285,6 @@ export default function ReportPage() {
       </div>
     );
   }
-
   return (
     <div className="min-h-screen w-full bg-slate-50 text-gray-900 font-['Inter',sans-serif]">
       <div className="max-w-4xl mx-auto px-4 py-8">

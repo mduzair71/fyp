@@ -379,65 +379,100 @@
 //   );
 // }
 
+
+
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
-import { useRouter } from 'next/navigation';
-import Link from 'next/link';
+import { useState, useEffect } from 'react';
+import { useParams, useRouter } from 'next/navigation';
 
-function getLocationStr(issue) {
-  if (!issue.location) return issue.location_area ? `${issue.location_area}, ${issue.location_district || ''}` : '—';
-  if (typeof issue.location === 'string') return issue.location;
-  const loc = issue.location;
-  return [loc.area, loc.district].filter(Boolean).join(', ') || '—';
+function getImageUrl(photoUrl) {
+  if (!photoUrl) return null;
+  if (photoUrl.startsWith('http://') || photoUrl.startsWith('https://')) {
+    return photoUrl;
+  }
+  const cleanPath = photoUrl.replace(/^\/+/, '');
+  return `http://localhost:8000/${cleanPath}`;
 }
 
-const STATUS_STEPS = ['PENDING', 'IN_PROGRESS', 'RESOLVED'];
+function getLocationStr(issue) {
+  if (!issue?.location) return issue?.location_area ? `${issue.location_area}, ${issue.location_district || ''}` : 'Location details not available';
+  if (typeof issue.location === 'string') return issue.location;
+  const loc = issue.location;
+  return [loc.area, loc.district].filter(Boolean).join(', ') || 'Location details not available';
+}
 
-export default function MyIssuesDashboard() {
+const STATUS_STEPS = [
+  { id: 'PENDING', label: 'Pending', icon: '⏳' },
+  { id: 'IN_PROGRESS', label: 'In Progress', icon: '🚀' },
+  { id: 'RESOLVED', label: 'Resolved', icon: '✅' },
+];
+
+export default function SingleIssueDetails() {
+  const params = useParams();
   const router = useRouter();
-  const [issues, setIssues] = useState([]);
+  const issueId = params?.id;
+
+  const [mounted, setMounted] = useState(false);
+  const [issue, setIssue] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [activeTab, setActiveTab] = useState('ALL');
-
-  // Modal State
-  const [selectedIssue, setSelectedIssue] = useState(null);
   const [supporting, setSupporting] = useState(false);
+  const [imgError, setImgError] = useState(false);
+
+  // Hydration sync
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   useEffect(() => {
-    const userId = localStorage.getItem('user_id');
+    if (!issueId || !mounted) return;
 
-    if (!userId) {
-      router.push('/login');
-      return;
-    }
-
-    const url = `http://localhost:8000/issues/user/${userId}`;
-
-    fetch(url, { credentials: 'include' })
+    fetch(`http://localhost:8000/issues/${issueId}`, { credentials: 'include' })
       .then(async (res) => {
         const data = await res.json();
-        if (!res.ok) {
-          throw new Error(data.detail || `Request failed with status ${res.status}`);
-        }
+        if (!res.ok) throw new Error(data.detail || `Failed to fetch issue (${res.status})`);
         return data;
       })
       .then((data) => {
-        setIssues(data.data || []);
+        setIssue(data.data || data);
         setLoading(false);
       })
       .catch((err) => {
         setError(err.message);
         setLoading(false);
       });
-  }, [router]);
+  }, [issueId, mounted]);
+
+  const handleSupport = async () => {
+    if (!issue) return;
+    setSupporting(true);
+    try {
+      const res = await fetch(`http://localhost:8000/issues/${issue._id || issueId}/support`, {
+        method: 'POST',
+        credentials: 'include',
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || 'Failed to update support status');
+
+      const delta = data.supported ? 1 : -1;
+      setIssue((prev) => ({
+        ...prev,
+        supported: data.supported,
+        support_count: Math.max(0, (prev?.support_count || 0) + delta),
+      }));
+    } catch (err) {
+      alert(err.message);
+    } finally {
+      setSupporting(false);
+    }
+  };
 
   const statusConfig = {
-    PENDING:     { bg: 'bg-amber-50', text: 'text-amber-700', border: 'border-amber-200', dot: 'bg-amber-500', label: 'Pending', icon: '⚡' },
-    IN_PROGRESS: { bg: 'bg-blue-50', text: 'text-blue-700', border: 'border-blue-200', dot: 'bg-blue-600', label: 'In Progress', icon: '🚀' },
-    RESOLVED:    { bg: 'bg-emerald-50', text: 'text-emerald-700', border: 'border-emerald-200', dot: 'bg-emerald-600', label: 'Resolved', icon: '✅' },
-    REJECTED:    { bg: 'bg-red-50', text: 'text-red-700', border: 'border-red-200', dot: 'bg-red-600', label: 'Rejected', icon: '❌' },
+    PENDING: { bg: 'bg-amber-500/10', text: 'text-amber-400', border: 'border-amber-500/20', label: 'Pending', icon: '⚡' },
+    IN_PROGRESS: { bg: 'bg-blue-500/10', text: 'text-blue-400', border: 'border-blue-500/20', label: 'In Progress', icon: '🚀' },
+    RESOLVED: { bg: 'bg-emerald-500/10', text: 'text-emerald-400', border: 'border-emerald-500/20', label: 'Resolved', icon: '✅' },
+    REJECTED: { bg: 'bg-rose-500/10', text: 'text-rose-400', border: 'border-rose-500/20', label: 'Rejected', icon: '❌' },
   };
 
   const getNormalizedStatus = (status) => {
@@ -446,294 +481,175 @@ export default function MyIssuesDashboard() {
     return statusConfig[upper] ? upper : 'PENDING';
   };
 
-  const metrics = useMemo(() => {
-    const counts = { total: issues.length, pending: 0, inProgress: 0, resolved: 0, rejected: 0 };
-    issues.forEach((issue) => {
-      const st = getNormalizedStatus(issue.status);
-      if (st === 'PENDING') counts.pending++;
-      else if (st === 'IN_PROGRESS') counts.inProgress++;
-      else if (st === 'RESOLVED') counts.resolved++;
-      else if (st === 'REJECTED') counts.rejected++;
-    });
-    return counts;
-  }, [issues]);
-
-  const filteredIssues = useMemo(() => {
-    if (activeTab === 'ALL') return issues;
-    return issues.filter((i) => getNormalizedStatus(i.status) === activeTab);
-  }, [issues, activeTab]);
-
-  const handleSupport = async (issueId) => {
-    setSupporting(true);
-    try {
-      const res = await fetch(`http://localhost:8000/issues/${issueId}/support`, {
-        method: 'POST',
-        credentials: 'include',
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.detail || 'Failed to update support');
-
-      const updatedCountDelta = data.supported ? 1 : -1;
-
-      // Update main state
-      setIssues(prev => prev.map(item => item._id === issueId ? { ...item, support_count: (item.support_count || 0) + updatedCountDelta } : item));
-
-      // Update modal state
-      setSelectedIssue(prev => prev ? { ...prev, supported: data.supported, support_count: (prev.support_count || 0) + updatedCountDelta } : null);
-    } catch (err) {
-      alert(err.message);
-    } finally {
-      setSupporting(false);
-    }
-  };
-
-  if (loading) {
+  if (!mounted || loading) {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center bg-slate-50 text-blue-600">
-        <div className="w-10 h-10 border-4 border-slate-200 border-t-blue-600 rounded-full animate-spin" />
-        <p className="mt-4 font-bold text-sm text-slate-500">Loading dashboard...</p>
+      <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center text-slate-400">
+        <div className="w-12 h-12 border-4 border-slate-800 border-t-blue-500 rounded-full animate-spin" />
+        <p className="mt-4 font-semibold text-sm tracking-wide text-slate-300">Loading Issue Details...</p>
       </div>
     );
   }
 
-  if (error) {
+  if (error || !issue) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-50 px-6">
-        <div className="bg-white p-8 rounded-2xl border border-red-200 text-center max-w-md shadow-sm">
-          <p className="text-4xl m-0">🚨</p>
-          <h3 className="text-red-600 my-2 font-bold text-lg">Dashboard Sync Error</h3>
-          <p className="text-slate-500 text-sm mb-6">{error}</p>
+      <div className="min-h-screen bg-slate-950 flex items-center justify-center px-4">
+        <div className="bg-slate-900 border border-slate-800 p-8 rounded-2xl text-center max-w-md shadow-2xl">
+          <div className="w-12 h-12 bg-rose-500/10 text-rose-500 rounded-xl flex items-center justify-center mx-auto mb-4 text-xl">⚠️</div>
+          <h3 className="text-white font-bold text-lg mb-2">Issue Not Found</h3>
+          <p className="text-slate-400 text-sm mb-6 leading-relaxed">{error || 'Could not load details for this issue.'}</p>
           <button
-            onClick={() => window.location.reload()}
-            className="bg-blue-600 hover:bg-blue-700 text-white border-none px-6 py-2.5 rounded-xl font-bold text-sm transition-colors cursor-pointer"
+            onClick={() => router.back()}
+            className="w-full bg-blue-600 hover:bg-blue-500 text-white font-semibold py-2.5 rounded-xl transition-all"
           >
-            Try Again
+            ← Back
           </button>
         </div>
       </div>
     );
   }
 
+  const currentStatus = getNormalizedStatus(issue.status);
+  const statusInfo = statusConfig[currentStatus];
+  const photoPath = getImageUrl(issue.photo_url || issue.image || issue.photo);
+  const activeStepIdx = STATUS_STEPS.findIndex((s) => s.id === currentStatus);
+
   return (
-    <div className="min-h-screen w-full bg-slate-50 text-slate-900 font-['Inter',sans-serif] pb-20">
-
-      {/* Header Banner */}
-      <div className="bg-gradient-to-br from-white to-blue-50 border-b border-slate-200 px-6 pt-14 pb-10">
-        <div className="max-w-6xl mx-auto flex justify-between items-center flex-wrap gap-5">
-          <div>
-            <span className="inline-block px-3 py-1 rounded-full bg-indigo-100 border border-indigo-200 text-indigo-700 text-xs font-extrabold uppercase tracking-wider mb-2">
-              User Workspace
-            </span>
-            <h1 className="text-3xl sm:text-4xl font-extrabold text-slate-900 tracking-tight m-0">
-              My Issues Console
-            </h1>
-            <p className="text-slate-500 mt-1.5 text-sm">Real-time state tracking and resolution monitoring.</p>
-          </div>
-
-          <Link
-            href="/report"
-            className="inline-flex items-center gap-2 bg-gradient-to-br from-emerald-500 to-emerald-600 text-white px-6 py-3 rounded-xl font-extrabold no-underline text-sm shadow-lg shadow-emerald-500/25 hover:shadow-emerald-500/35 transition-shadow"
+    <div className="min-h-screen bg-slate-950 text-slate-100 font-sans antialiased pb-20">
+      <header className="border-b border-slate-800/80 bg-slate-900/50 backdrop-blur-md sticky top-0 z-30">
+        <div className="max-w-5xl mx-auto px-6 py-4 flex items-center justify-between gap-4">
+          <button
+            onClick={() => router.back()}
+            className="inline-flex items-center gap-2 text-xs font-semibold text-slate-400 hover:text-white bg-slate-800/60 hover:bg-slate-800 px-3.5 py-2 rounded-xl transition-all border border-slate-700/50"
           >
-            <span>+</span> Report New Issue
-          </Link>
-        </div>
-      </div>
+            ← Back
+          </button>
 
-      <div className="max-w-6xl mx-auto px-6 py-8">
-
-        {/* Analytics Grid */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-8">
-          <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm">
-            <span className="text-xs font-extrabold text-slate-500 uppercase tracking-wide">Total Reported</span>
-            <p className="text-3xl font-extrabold mt-1.5 text-slate-900">{metrics.total}</p>
-          </div>
-          <div className="bg-white border border-amber-100 rounded-2xl p-5 shadow-sm">
-            <span className="text-xs font-extrabold text-amber-700 uppercase tracking-wide">Pending</span>
-            <p className="text-3xl font-extrabold mt-1.5 text-amber-600">{metrics.pending}</p>
-          </div>
-          <div className="bg-white border border-blue-100 rounded-2xl p-5 shadow-sm">
-            <span className="text-xs font-extrabold text-blue-700 uppercase tracking-wide">In Progress</span>
-            <p className="text-3xl font-extrabold mt-1.5 text-blue-600">{metrics.inProgress}</p>
-          </div>
-          <div className="bg-white border border-emerald-100 rounded-2xl p-5 shadow-sm">
-            <span className="text-xs font-extrabold text-emerald-700 uppercase tracking-wide">Resolved</span>
-            <p className="text-3xl font-extrabold mt-1.5 text-emerald-600">{metrics.resolved}</p>
+          <div className="flex items-center gap-2">
+            <span className="text-[10px] font-extrabold tracking-widest text-blue-400 uppercase bg-blue-500/10 px-2.5 py-1 rounded-md border border-blue-500/20">
+              {issue.category || 'General'}
+            </span>
+            <span className={`text-[10px] font-extrabold px-2.5 py-1 rounded-md border ${statusInfo.bg} ${statusInfo.text} ${statusInfo.border}`}>
+              {statusInfo.icon} {statusInfo.label}
+            </span>
           </div>
         </div>
+      </header>
 
-        {/* Filter Tabs */}
-        <div className="flex gap-2 border-b border-slate-200 pb-3 mb-7 overflow-x-auto">
-          {[
-            { id: 'ALL', label: `All Issues (${metrics.total})` },
-            { id: 'PENDING', label: `⚡ Pending (${metrics.pending})` },
-            { id: 'IN_PROGRESS', label: `🚀 In Progress (${metrics.inProgress})` },
-            { id: 'RESOLVED', label: `✅ Resolved (${metrics.resolved})` },
-            { id: 'REJECTED', label: `❌ Rejected (${metrics.rejected})` },
-          ].map((tab) => (
+      <main className="max-w-5xl mx-auto px-6 pt-8 space-y-6">
+        <div className="bg-slate-900/80 border border-slate-800 rounded-2xl p-6 sm:p-8 shadow-xl relative overflow-hidden">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
+            <div>
+              <p className="text-xs font-semibold text-slate-500 mb-1">
+                Reported on {issue.createdAt ? new Date(issue.createdAt).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) : 'N/A'}
+              </p>
+              <h1 className="text-2xl sm:text-3xl font-extrabold text-white tracking-tight leading-snug">
+                {issue.title}
+              </h1>
+            </div>
+
             <button
-              key={tab.id}
-              onClick={() => setActiveTab(tab.id)}
-              className={`px-5 py-2.5 rounded-xl font-bold text-sm whitespace-nowrap transition-colors cursor-pointer border ${
-                activeTab === tab.id
-                  ? 'bg-gradient-to-br from-indigo-600 to-indigo-800 text-white border-transparent shadow-sm'
-                  : 'bg-white text-slate-500 border-slate-200 hover:border-slate-300'
-              }`}
+              onClick={handleSupport}
+              disabled={supporting}
+              className={`inline-flex items-center justify-center gap-2 px-6 py-3.5 rounded-xl font-bold text-sm transition-all shadow-lg self-start md:self-auto shrink-0 ${
+                issue.supported
+                  ? 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-emerald-600/20'
+                  : 'bg-blue-600 hover:bg-blue-500 text-white shadow-blue-600/20 hover:shadow-blue-600/30'
+              } active:scale-95 disabled:opacity-50`}
             >
-              {tab.label}
+              <span>{issue.supported ? '✅ Supported' : "🙋 I'm Affected"}</span>
+              <span className="bg-black/20 px-2 py-0.5 rounded-md text-xs font-mono">
+                {issue.support_count || 0}
+              </span>
             </button>
-          ))}
+          </div>
+
+          <div className="mt-6 pt-6 border-t border-slate-800/80 grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
+            <div className="flex items-center gap-2 text-slate-300">
+              <span className="text-slate-500 text-base">📍</span>
+              <span className="font-medium">{getLocationStr(issue)}</span>
+            </div>
+            {issue.reporter_name && (
+              <div className="flex items-center gap-2 text-slate-300 sm:justify-end">
+                <span className="text-slate-500 text-base">👤</span>
+                <span>Reported by: <strong className="text-white">{issue.reporter_name}</strong></span>
+              </div>
+            )}
+          </div>
         </div>
 
-        {/* Issues List */}
-        {filteredIssues.length === 0 ? (
-          <div className="text-center py-16 px-6 bg-white rounded-2xl border-2 border-dashed border-slate-300">
-            <p className="text-5xl m-0 mb-2">📂</p>
-            <h3 className="text-lg font-extrabold text-slate-700 m-0">No Records Available</h3>
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 gap-4">
-            {filteredIssues.map((issue) => {
-              const stKey = getNormalizedStatus(issue.status);
-              const status = statusConfig[stKey];
+        <div className="bg-slate-900/60 border border-slate-800 rounded-2xl p-6">
+          <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-6">Resolution Status Tracker</p>
+          
+          <div className="relative flex items-center justify-between max-w-2xl mx-auto">
+            <div className="absolute top-1/2 left-0 right-0 h-1 bg-slate-800 -translate-y-1/2 z-0" />
+            <div
+              className="absolute top-1/2 left-0 h-1 bg-blue-500 -translate-y-1/2 z-0 transition-all duration-500"
+              style={{
+                width: currentStatus === 'REJECTED' ? '0%' : `${(activeStepIdx / (STATUS_STEPS.length - 1)) * 100}%`,
+              }}
+            />
+
+            {STATUS_STEPS.map((step, idx) => {
+              const isCompleted = currentStatus !== 'REJECTED' && idx <= activeStepIdx;
+              const isCurrent = currentStatus === step.id;
 
               return (
-                <div
-                  key={issue._id}
-                  onClick={() => setSelectedIssue(issue)}
-                  className="bg-white border border-slate-200 rounded-2xl p-6 cursor-pointer transition-all hover:border-indigo-300 hover:-translate-y-0.5 hover:shadow-md"
-                >
-                  <div className="flex justify-between items-center flex-wrap gap-3 mb-3">
-                    {issue.category && (
-                      <span className="text-xs font-extrabold uppercase text-sky-700 bg-sky-50 px-2.5 py-1 rounded-lg">
-                        {issue.category}
-                      </span>
-                    )}
-
-                    <span className={`px-3.5 py-1.5 rounded-full text-xs font-extrabold border ${status.bg} ${status.text} ${status.border}`}>
-                      {status.label}
-                    </span>
+                <div key={step.id} className="relative z-10 flex flex-col items-center">
+                  <div
+                    className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-xs transition-all ${
+                      isCompleted
+                        ? 'bg-blue-600 text-white ring-4 ring-slate-950 shadow-md shadow-blue-500/20'
+                        : 'bg-slate-800 text-slate-500 border border-slate-700'
+                    }`}
+                  >
+                    {step.icon}
                   </div>
-
-                  <h3 className="text-lg font-extrabold text-slate-900 m-0 mb-2">
-                    {issue.title}
-                  </h3>
-
-                  {issue.summary && (
-                    <p className="text-slate-600 text-sm m-0 mb-4">
-                      {issue.summary}
-                    </p>
-                  )}
-
-                  <div className="flex justify-between text-xs text-slate-500 pt-3.5 border-t border-slate-100">
-                    <span>📍 {getLocationStr(issue)}</span>
-                    {issue.createdAt && <span>🕒 {new Date(issue.createdAt).toLocaleDateString()}</span>}
-                  </div>
+                  <span className={`text-xs font-semibold mt-2 ${isCurrent ? 'text-blue-400' : 'text-slate-400'}`}>
+                    {step.label}
+                  </span>
                 </div>
               );
             })}
           </div>
-        )}
+        </div>
 
-      </div>
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <div className="lg:col-span-2 bg-slate-900/60 border border-slate-800 rounded-2xl p-6 sm:p-8">
+            <h3 className="text-sm font-bold text-slate-300 uppercase tracking-wider mb-3">Issue Description</h3>
+            <p className="text-slate-300 leading-relaxed text-sm whitespace-pre-wrap">
+              {issue.description || issue.summary || 'No detailed description provided for this report.'}
+            </p>
+          </div>
 
-      {/* Issue Details Modal */}
-      {selectedIssue && (
-        <div
-          className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4 animate-fade-in"
-          onClick={() => setSelectedIssue(null)}
-        >
-          <div
-            className="bg-white rounded-3xl w-full max-w-2xl max-h-[90vh] overflow-y-auto shadow-2xl p-7 animate-pop-in"
-            onClick={(e) => e.stopPropagation()}
-          >
-            {/* Modal Header */}
-            <div className="flex justify-between items-start mb-4">
-              <div>
-                <span className="text-xs font-extrabold uppercase text-sky-700 bg-sky-50 px-2.5 py-1 rounded-lg">
-                  {selectedIssue.category}
-                </span>
-                <h2 className="text-2xl font-extrabold mt-2 text-slate-900">{selectedIssue.title}</h2>
+          <div className="bg-slate-900/60 border border-slate-800 rounded-2xl p-6 flex flex-col">
+            <h3 className="text-sm font-bold text-slate-300 uppercase tracking-wider mb-3">Attached Photo</h3>
+
+            {photoPath && !imgError ? (
+              <div className="rounded-xl overflow-hidden border border-slate-800 bg-slate-950 flex-1 flex items-center justify-center group relative min-h-[220px]">
+                <img
+                  src={photoPath}
+                  alt={issue.title}
+                  onError={() => setImgError(true)}
+                  className="w-full h-full object-cover max-h-80 transition-transform duration-300 group-hover:scale-105"
+                />
+                <a
+                  href={photoPath}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="absolute bottom-3 right-3 bg-slate-900/90 hover:bg-slate-900 text-white text-xs font-semibold px-3 py-1.5 rounded-lg border border-slate-700 backdrop-blur-md opacity-0 group-hover:opacity-100 transition-opacity"
+                >
+                  🔍 View Full
+                </a>
               </div>
-              <button
-                onClick={() => setSelectedIssue(null)}
-                className="bg-slate-100 hover:bg-slate-200 border-none rounded-full w-8 h-8 text-lg text-slate-500 cursor-pointer transition-colors shrink-0"
-              >
-                ✕
-              </button>
-            </div>
-
-            {/* Timeline */}
-            <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 mb-5">
-              <p className="text-xs font-extrabold uppercase text-slate-500 m-0 mb-2">Status Progress</p>
-              <div className="flex items-center justify-between">
-                {STATUS_STEPS.map((step, i) => {
-                  const currIdx = STATUS_STEPS.indexOf(selectedIssue.status);
-                  return (
-                    <span
-                      key={step}
-                      className={`text-xs ${step === selectedIssue.status ? 'font-extrabold' : 'font-semibold'} ${i <= currIdx ? 'text-emerald-600' : 'text-slate-400'}`}
-                    >
-                      {statusConfig[step]?.label || step}
-                    </span>
-                  );
-                })}
-              </div>
-            </div>
-
-            {/* Description */}
-            <div className="mb-5">
-              <p className="text-xs font-extrabold uppercase text-slate-500 m-0 mb-1.5">Description</p>
-              <p className="text-sm text-slate-700 leading-relaxed m-0">{selectedIssue.description || 'No description provided.'}</p>
-            </div>
-
-            {/* Photo Evidence */}
-            {selectedIssue.photo_url && (
-              <div className="mb-5">
-                <p className="text-xs font-extrabold uppercase text-slate-500 m-0 mb-1.5">Photo Evidence</p>
-                <div className="w-full max-h-72 rounded-xl overflow-hidden border border-slate-200 bg-slate-100">
-                  <img src={`http://localhost:8000/${selectedIssue.photo_url}`} alt="Evidence" className="w-full h-72 object-cover" />
-                </div>
+            ) : (
+              <div className="rounded-xl border border-dashed border-slate-800 bg-slate-950/40 min-h-[200px] flex flex-col items-center justify-center text-slate-500 text-xs p-6 text-center">
+                <span className="text-2xl mb-2">🖼️</span>
+                <span>{imgError ? 'Failed to load photo attachment' : 'No photo attached to this issue'}</span>
               </div>
             )}
-
-            {/* Location & Action */}
-            <div className="flex justify-between items-center flex-wrap gap-4 pt-4 border-t border-slate-100">
-              <div>
-                <p className="text-xs font-extrabold uppercase text-slate-500 m-0">Location</p>
-                <p className="text-sm font-bold text-slate-800 m-0">📍 {getLocationStr(selectedIssue)}</p>
-              </div>
-
-              <button
-                onClick={() => handleSupport(selectedIssue._id)}
-                disabled={supporting}
-                className={`text-white border-none px-5 py-2.5 rounded-xl font-extrabold text-sm cursor-pointer transition-colors disabled:opacity-60 ${
-                  selectedIssue.supported ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-indigo-600 hover:bg-indigo-700'
-                }`}
-              >
-                🙋 {selectedIssue.supported ? 'Supported' : "I'm Affected"} ({selectedIssue.support_count || 0})
-              </button>
-            </div>
           </div>
         </div>
-      )}
-
-      <style jsx global>{`
-        @keyframes fadeIn {
-          from { opacity: 0; }
-          to { opacity: 1; }
-        }
-        .animate-fade-in { animation: fadeIn 0.15s ease both; }
-
-        @keyframes popIn {
-          from { opacity: 0; transform: scale(0.96) translateY(-6px); }
-          to { opacity: 1; transform: scale(1) translateY(0); }
-        }
-        .animate-pop-in { animation: popIn 0.2s ease both; }
-
-        @media (prefers-reduced-motion: reduce) {
-          .animate-fade-in, .animate-pop-in { animation: none !important; }
-        }
-      `}</style>
+      </main>
     </div>
   );
 }

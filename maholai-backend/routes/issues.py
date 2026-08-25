@@ -828,7 +828,7 @@ from bson import ObjectId
 from routes.auth import require_admin, get_current_user, log_audit_action
 from models.issue import CATEGORY_DEPARTMENT_MAP
 from utils.scope import has_scope_access, scoped_issue_query
-from utils.ai_analyzer import analyze_issue
+from utils.ai_analyzer import analyze_issue, check_duplicate_with_ai
 from utils.uploads import validate_upload
 from utils.issue_helpers import (
     identify_viewer,
@@ -995,8 +995,77 @@ async def create_issue(
         ai_result = analyze_issue(title, description, f"{location_area}, {location_district}")
         issue_data["summary"] = ai_result["summary"]
         issue_data["priority"] = ai_result["priority"]
-        
+           # =====================================================================
+        # DUPLICATE DETECTION LOGIC (AI-based via Gemini)
+        # =====================================================================
+        # Pehle same category + same district ke narrow candidates nikalo,
+        # taake Gemini ko pura database na bhejna pade.
+        existing_issues = list(issues_collection.find({
+            "category": category,
+            "location.district": location_district,
+            "status": {"$in": ["PENDING", "IN_PROGRESS"]},
+            "is_deleted": {"$ne": True}
+        }).limit(15))
 
+        dup_result = check_duplicate_with_ai(title, description, existing_issues)
+        possible_duplicate = dup_result["is_duplicate"]
+        duplicate_parent_id = dup_result["matched_issue_id"]
+
+        # Agar upload wali file hai to pehle usse handle kar lo (dono
+        # cases -- duplicate ho ya naya issue -- mein zaroorat pad sakti hai)
+        uploaded_photo_url = None
+        if file and file.filename:
+            content = await file.read()
+            try:
+                ext = validate_upload(file.filename, file.content_type, len(content))
+            except ValueError as ve:
+                raise HTTPException(status_code=422, detail=str(ve))
+            os.makedirs("uploads", exist_ok=True)
+            unique_filename = f"{uuid.uuid4()}{ext}"
+            file_path = f"uploads/{unique_filename}"
+            with open(file_path, "wb") as buffer:
+                buffer.write(content)
+            uploaded_photo_url = file_path
+
+        if possible_duplicate and duplicate_parent_id:
+            # Naya issue create MAT karo -- purane issue ka count badhao
+            try:
+                parent_oid = ObjectId(duplicate_parent_id)
+            except Exception:
+                parent_oid = None
+
+            if parent_oid:
+                issues_collection.update_one(
+                    {"_id": parent_oid},
+                    {
+                        "$inc": {"report_count": 1},
+                        "$addToSet": {"reported_by": created_by},
+                    },
+                )
+                updated_issue = issues_collection.find_one({"_id": parent_oid})
+                return {
+                    "message": "This issue was already reported. Your report has been added to it.",
+                    "possible_duplicate": True,
+                    "duplicate_of": duplicate_parent_id,
+                    "data": serialize_issue(updated_issue),
+                }
+
+        # Duplicate nahi mila -- naya issue banao
+        issue_data["is_duplicate"] = False
+        issue_data["duplicate_of"] = None
+        issue_data["report_count"] = 1
+        issue_data["reported_by"] = [created_by]
+        if uploaded_photo_url:
+            issue_data["photo_url"] = uploaded_photo_url
+
+        result = issues_collection.insert_one(issue_data)
+        inserted_issue = issues_collection.find_one({"_id": result.inserted_id})
+        return {
+            "message": "Issue reported successfully",
+            "possible_duplicate": False,
+            "duplicate_of": None,
+            "data": serialize_issue(inserted_issue),
+        }
         if file and file.filename:
             content = await file.read()
             try:
@@ -1012,7 +1081,13 @@ async def create_issue(
 
         result = issues_collection.insert_one(issue_data)
         inserted_issue = issues_collection.find_one({"_id": result.inserted_id})
-        return {"message": "Issue reported successfully", "possible_duplicate": False, "data": serialize_issue(inserted_issue)}
+        return {
+            "message": "Issue reported successfully",
+            "possible_duplicate": possible_duplicate,
+            "duplicate_of": duplicate_parent_id,
+            "data": serialize_issue(inserted_issue)
+        }
+        # return {"message": "Issue reported successfully", "possible_duplicate": False, "data": serialize_issue(inserted_issue)}
     except HTTPException:
         raise
     except Exception as e:

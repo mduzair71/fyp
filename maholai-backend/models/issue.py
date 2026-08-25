@@ -295,8 +295,12 @@ class Issue(BaseModel):
     frequency: Optional[str] = None
     severity_level: Optional[str] = None
     status: str = "PENDING"
-    created_by: str  # User ID
+    created_by: str  # User ID (jisne pehli baar report kiya)
     created_at: datetime = Field(default_factory=datetime.utcnow)
+
+    # ---- Duplicate-tracking fields ----
+    report_count: int = 1
+    reported_by: List[str] = Field(default_factory=list)  # sab user IDs jinhone ye issue report kiya
 
     class Config:
         json_schema_extra = {
@@ -310,6 +314,8 @@ class Issue(BaseModel):
                     "latitude": 34.0151,
                     "longitude": 71.5249
                 },
-                "created_by": "60d5ec49f1a2c81128c11a1a"
+                "created_by": "60d5ec49f1a2c81128c11a1a",
+                "report_count": 1,
+                "reported_by": ["60d5ec49f1a2c81128c11a1a"]
             }
         }
