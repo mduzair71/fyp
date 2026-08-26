@@ -152,11 +152,9 @@
 //     </div>
 //   );
 // }
-
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
-import Link from 'next/link';
 
 function getLocationStr(issue) {
   if (!issue.location) return issue.location_area ? `${issue.location_area}, ${issue.location_district || ''}` : '—';
@@ -173,6 +171,7 @@ export default function AllIssuesPage() {
   // Filters State
   const [selectedDistrict, setSelectedDistrict] = useState('ALL');
   const [selectedArea, setSelectedArea] = useState('ALL');
+  const [selectedCategory, setSelectedCategory] = useState('ALL');
   const [selectedStatus, setSelectedStatus] = useState('ALL');
   const [searchQuery, setSearchQuery] = useState('');
 
@@ -206,10 +205,10 @@ export default function AllIssuesPage() {
 
   // Status Badges Styling
   const statusConfig = {
-    PENDING:     { bg: '#fef3c7', color: '#d97706', border: '#fcd34d', label: 'Pending', icon: '⏳' },
-    IN_PROGRESS: { bg: '#dbeafe', color: '#2563eb', border: '#93c5fd', label: 'In Progress', icon: '🔄' },
-    RESOLVED:    { bg: '#dcfce7', color: '#16a34a', border: '#86efac', label: 'Resolved', icon: '✅' },
-    REJECTED:    { bg: '#fee2e2', color: '#dc2626', border: '#fca5a5', label: 'Rejected', icon: '❌' },
+    PENDING:     { bg: '#fef3c7', color: '#b45309', border: '#fcd34d', label: 'Pending', icon: '⏳' },
+    IN_PROGRESS: { bg: '#dbeafe', color: '#1d4ed8', border: '#93c5fd', label: 'In Progress', icon: '🔄' },
+    RESOLVED:    { bg: '#dcfce7', color: '#15803d', border: '#86efac', label: 'Resolved', icon: '✅' },
+    REJECTED:    { bg: '#fee2e2', color: '#b91c1c', border: '#fca5a5', label: 'Rejected', icon: '❌' },
   };
 
   // Dynamic District & Area Dropdown Options
@@ -227,20 +226,46 @@ export default function AllIssuesPage() {
     return Array.from(set).sort();
   }, [issues, selectedDistrict]);
 
+  // Dynamic Category Dropdown (Case-insensitive unique categories collection)
+  const categories = useMemo(() => {
+    const set = new Set(
+      issues
+        .map((i) => i.category)
+        .filter(Boolean)
+        .map((c) => c.trim())
+    );
+    return Array.from(set).sort();
+  }, [issues]);
+
   // Filtering Logic
   const filteredIssues = useMemo(() => {
     return issues.filter((issue) => {
       const issueDist = issue.location_district || issue.location?.district || '';
       const issueArea = issue.location_area || issue.location?.area || '';
+      const issueCategory = issue.category || '';
+
       const matchesDistrict = selectedDistrict === 'ALL' || issueDist === selectedDistrict;
       const matchesArea = selectedArea === 'ALL' || issueArea === selectedArea;
+      const matchesCategory = selectedCategory === 'ALL' || issueCategory.toLowerCase() === selectedCategory.toLowerCase();
       const matchesStatus = selectedStatus === 'ALL' || issue.status === selectedStatus;
       const matchesSearch = issue.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
                             (issue.summary && issue.summary.toLowerCase().includes(searchQuery.toLowerCase()));
 
-      return matchesDistrict && matchesArea && matchesStatus && matchesSearch;
+      return matchesDistrict && matchesArea && matchesCategory && matchesStatus && matchesSearch;
     });
-  }, [issues, selectedDistrict, selectedArea, selectedStatus, searchQuery]);
+  }, [issues, selectedDistrict, selectedArea, selectedCategory, selectedStatus, searchQuery]);
+
+  // Selected Area Specific Stats
+  const areaStats = useMemo(() => {
+    if (selectedDistrict === 'ALL' && selectedArea === 'ALL') return null;
+
+    const total = filteredIssues.length;
+    const resolved = filteredIssues.filter((i) => i.status === 'RESOLVED').length;
+    const pending = filteredIssues.filter((i) => i.status === 'PENDING').length;
+    const inProgress = filteredIssues.filter((i) => i.status === 'IN_PROGRESS').length;
+
+    return { total, resolved, pending, inProgress };
+  }, [filteredIssues, selectedDistrict, selectedArea]);
 
   const setMyAreaFilter = () => {
     if (myDistrict) setSelectedDistrict(myDistrict);
@@ -250,60 +275,91 @@ export default function AllIssuesPage() {
   const clearFilters = () => {
     setSelectedDistrict('ALL');
     setSelectedArea('ALL');
+    setSelectedCategory('ALL');
     setSelectedStatus('ALL');
     setSearchQuery('');
   };
 
   return (
-    <div style={{ minHeight: '100vh', width: '100%', backgroundColor: '#f8fafc', color: '#0f172a', fontFamily: "'Inter', sans-serif", paddingBottom: '4rem' }}>
+    <div className="min-h-screen w-full bg-slate-100 text-slate-800 font-sans pb-16">
       
-      {/* Header Banner - Full Width */}
-      <div style={{ background: 'linear-[#0f172a], #1e293b', backgroundColor: '#0f172a', color: '#ffffff', padding: '3.5rem 2rem 2.5rem', borderBottom: '1px solid #334155' }}>
-        <div style={{ maxWidth: '1400px', margin: '0 auto', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem' }}>
+      {/* Dark Forest Green Hero Banner */}
+      <div className="bg-[#102d21] text-white pt-10 pb-20 px-6 sm:px-10 border-b border-emerald-900/50 relative overflow-hidden">
+        <div className="max-w-7xl mx-auto flex flex-col md:flex-row justify-between items-start md:items-center gap-6 relative z-10">
           <div>
-            <h1 style={{ fontSize: '2.2rem', fontWeight: 800, margin: 0, letterSpacing: '-0.025em' }}>Public Issues Hub</h1>
-            <p style={{ color: '#94a3b8', margin: '0.5rem 0 0', fontSize: '1rem' }}>Browse, filter, and track community civic reports in real-time.</p>
+            <h1 className="text-3xl sm:text-4xl font-black tracking-tight text-white mb-2">
+              Public Issues Hub
+            </h1>
+            <div className="flex items-center gap-3 flex-wrap">
+              <p className="text-emerald-100/80 text-sm sm:text-base font-medium">
+                Browse, filter, and track community civic reports in real-time.
+              </p>
+              <span className="bg-emerald-900/80 text-emerald-300 text-xs font-bold px-3 py-1 rounded-md border border-emerald-700/50">
+                Active Alerts: {issues.length}
+              </span>
+            </div>
           </div>
-          <Link href="/report" style={{ backgroundColor: '#16a34a', color: '#fff', padding: '0.75rem 1.5rem', borderRadius: '10px', fontWeight: 700, textDecoration: 'none', boxShadow: '0 4px 12px rgba(22,163,74,0.3)', transition: 'all 0.2s' }}>
-            + Report New Issue
-          </Link>
+
+          <a 
+            href="/report" 
+            className="inline-flex items-center gap-2 bg-emerald-500 hover:bg-emerald-600 text-white px-6 py-3 rounded-2xl font-bold text-sm shadow-lg shadow-emerald-500/20 transition-all no-underline"
+          >
+            <span>+</span> Report New Issue
+          </a>
         </div>
       </div>
 
-      {/* Main Full-Width Container */}
-      <div style={{ maxWidth: '1400px', margin: '0 auto', padding: '2rem 1.5rem' }}>
+      {/* Main Container */}
+      <div className="max-w-7xl mx-auto px-4 sm:px-6">
         
-        {/* Filters Panel */}
-        <div style={{ backgroundColor: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '16px', padding: '1.25rem 1.5rem', boxShadow: '0 4px 20px -2px rgba(0,0,0,0.05)', marginBottom: '2rem' }}>
+        {/* Floating Glassmorphic Filters Overlapping Banner */}
+        <div className="bg-white/95 backdrop-blur-md border border-slate-200/80 rounded-3xl p-5 sm:p-6 shadow-xl -mt-10 mb-8 relative z-20">
           
-          {/* Top Row: Search & My Area Shortcut */}
-          <div style={{ display: 'flex', gap: '1rem', marginBottom: '1.25rem', flexWrap: 'wrap', alignItems: 'center' }}>
-            <input
-              type="text"
-              placeholder="🔍 Search issues by title or keyword..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              style={{ flex: 1, minWidth: '260px', padding: '0.65rem 1rem', border: '1px solid #cbd5e1', borderRadius: '10px', fontSize: '0.9rem', outline: 'none' }}
-            />
+          {/* Top Search Bar & Action Buttons */}
+          <div className="flex flex-col sm:flex-row gap-3 mb-5">
+            <div className="relative flex-1">
+              <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 text-sm">🔍</span>
+              <input
+                type="text"
+                placeholder="Search issues by title, keyword, or problem..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-sm text-slate-800 focus:bg-white focus:border-emerald-600 focus:outline-none transition-all"
+              />
+            </div>
+
             {myDistrict && (
-              <button onClick={setMyAreaFilter} style={{ backgroundColor: '#f0fdf4', color: '#16a34a', border: '1px solid #bbf7d0', padding: '0.65rem 1.2rem', borderRadius: '10px', fontSize: '0.85rem', fontWeight: 700, cursor: 'pointer' }}>
-                📍 Show My Area ({myDistrict})
+              <button 
+                onClick={setMyAreaFilter} 
+                className="bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200/80 px-4 py-3 rounded-2xl text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-1.5 whitespace-nowrap"
+              >
+                <span>📍</span> Show My Area ({myDistrict})
               </button>
             )}
-            {(selectedDistrict !== 'ALL' || selectedArea !== 'ALL' || selectedStatus !== 'ALL' || searchQuery) && (
-              <button onClick={clearFilters} style={{ backgroundColor: '#f1f5f9', color: '#64748b', border: 'none', padding: '0.65rem 1.2rem', borderRadius: '10px', fontSize: '0.85rem', fontWeight: 600, cursor: 'pointer' }}>
+
+            {(selectedDistrict !== 'ALL' || selectedArea !== 'ALL' || selectedCategory !== 'ALL' || selectedStatus !== 'ALL' || searchQuery) && (
+              <button 
+                onClick={clearFilters} 
+                className="bg-slate-100 hover:bg-slate-200 text-slate-600 px-4 py-3 rounded-2xl text-xs font-semibold transition-all cursor-pointer border-0"
+              >
                 Clear Filters
               </button>
             )}
           </div>
 
-          {/* Filter Dropdowns Grid */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem' }}>
+          {/* Filter Dropdowns Row */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             
             {/* District Filter */}
             <div>
-              <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', marginBottom: '0.4rem' }}>City / District</label>
-              <select value={selectedDistrict} onChange={(e) => { setSelectedDistrict(e.target.value); setSelectedArea('ALL'); }} style={{ width: '100%', padding: '0.6rem', border: '1px solid #cbd5e1', borderRadius: '8px', fontSize: '0.88rem', backgroundColor: '#fff' }}>
+              <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">
+                City / District
+              </label>
+              <select 
+                value={selectedDistrict} 
+                onChange={(e) => { setSelectedDistrict(e.target.value); setSelectedArea('ALL'); }}
+                className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-700 font-semibold focus:outline-none focus:border-emerald-600"
+              >
                 <option value="ALL">All Districts</option>
                 {districts.map((d) => <option key={d} value={d}>{d}</option>)}
               </select>
@@ -311,17 +367,44 @@ export default function AllIssuesPage() {
 
             {/* Area Filter */}
             <div>
-              <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', marginBottom: '0.4rem' }}>Local Area</label>
-              <select value={selectedArea} onChange={(e) => setSelectedArea(e.target.value)} style={{ width: '100%', padding: '0.6rem', border: '1px solid #cbd5e1', borderRadius: '8px', fontSize: '0.88rem', backgroundColor: '#fff' }}>
+              <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">
+                Local Area
+              </label>
+              <select 
+                value={selectedArea} 
+                onChange={(e) => setSelectedArea(e.target.value)}
+                className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-700 font-semibold focus:outline-none focus:border-emerald-600"
+              >
                 <option value="ALL">All Areas</option>
                 {areas.map((a) => <option key={a} value={a}>{a}</option>)}
               </select>
             </div>
 
+            {/* Category Filter */}
+            <div>
+              <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">
+                Category / Problem
+              </label>
+              <select 
+                value={selectedCategory} 
+                onChange={(e) => setSelectedCategory(e.target.value)}
+                className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-700 font-semibold focus:outline-none focus:border-emerald-600"
+              >
+                <option value="ALL">All Categories</option>
+                {categories.map((c) => <option key={c} value={c}>{c}</option>)}
+              </select>
+            </div>
+
             {/* Status Filter */}
             <div>
-              <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', marginBottom: '0.4rem' }}>Status</label>
-              <select value={selectedStatus} onChange={(e) => setSelectedStatus(e.target.value)} style={{ width: '100%', padding: '0.6rem', border: '1px solid #cbd5e1', borderRadius: '8px', fontSize: '0.88rem', backgroundColor: '#fff' }}>
+              <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">
+                Status
+              </label>
+              <select 
+                value={selectedStatus} 
+                onChange={(e) => setSelectedStatus(e.target.value)}
+                className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-700 font-semibold focus:outline-none focus:border-emerald-600"
+              >
                 <option value="ALL">All Statuses</option>
                 <option value="PENDING">⏳ Pending</option>
                 <option value="IN_PROGRESS">🔄 In Progress</option>
@@ -333,71 +416,121 @@ export default function AllIssuesPage() {
           </div>
         </div>
 
-        {/* Results Counter */}
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem' }}>
-          <p style={{ margin: 0, color: '#64748b', fontSize: '0.9rem', fontWeight: 600 }}>
-            Showing <span style={{ color: '#0f172a', fontWeight: 700 }}>{filteredIssues.length}</span> issues
+        {/* Area Stats Bar */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-5">
+          <p className="text-xs font-semibold text-slate-500 m-0">
+            Showing <span className="text-slate-900 font-bold">{filteredIssues.length}</span> issues
           </p>
+
+          {areaStats && (
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-[11px] font-bold bg-slate-200 text-slate-700 px-2.5 py-1 rounded-lg">
+                Total: {areaStats.total}
+              </span>
+              <span className="text-[11px] font-bold bg-amber-100 text-amber-800 px-2.5 py-1 rounded-lg">
+                Pending: {areaStats.pending}
+              </span>
+              <span className="text-[11px] font-bold bg-blue-100 text-blue-800 px-2.5 py-1 rounded-lg">
+                In Progress: {areaStats.inProgress}
+              </span>
+              <span className="text-[11px] font-bold bg-emerald-100 text-emerald-800 px-2.5 py-1 rounded-lg">
+                Resolved: {areaStats.resolved}
+              </span>
+            </div>
+          )}
         </div>
 
         {/* Loading / Error States */}
-        {loading && <p style={{ textAlign: 'center', color: '#64748b', padding: '3rem' }}>Loading reported issues...</p>}
-        {error && <p style={{ textAlign: 'center', color: '#ef4444', padding: '3rem' }}>Error loading data: {error}</p>}
+        {loading && <p className="text-center text-slate-500 py-12 text-sm">Loading reported issues...</p>}
+        {error && <p className="text-center text-red-500 py-12 text-sm">Error loading data: {error}</p>}
 
         {/* Empty State */}
         {!loading && !error && filteredIssues.length === 0 && (
-          <div style={{ textAlign: 'center', padding: '4rem 1rem', backgroundColor: '#ffffff', borderRadius: '16px', border: '1px dashed #cbd5e1' }}>
-            <p style={{ fontSize: '3rem', margin: 0 }}>🔍</p>
-            <h3 style={{ fontSize: '1.2rem', fontWeight: 700, color: '#334155', marginTop: '0.5rem' }}>No issues found</h3>
-            <p style={{ color: '#64748b', fontSize: '0.9rem' }}>Try adjusting your filters or search query to find results.</p>
+          <div className="text-center py-16 bg-white rounded-3xl border border-dashed border-slate-300">
+            <p className="text-4xl mb-2">🔍</p>
+            <h3 className="text-base font-bold text-slate-800">No issues found</h3>
+            <p className="text-xs text-slate-500 mt-1">Try adjusting your category, area, or status filters.</p>
           </div>
         )}
 
         {/* Issues Grid Display */}
         {!loading && !error && (
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: '1.25rem' }}>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
             {filteredIssues.map((issue) => {
               const status = statusConfig[issue.status] || statusConfig.PENDING;
-              return (
-                <Link key={issue._id} href={`/issues/${issue._id}`} style={{ textDecoration: 'none', color: 'inherit' }}>
-                  <div style={{ backgroundColor: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '16px', padding: '1.25rem', height: '100%', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', transition: 'transform 0.15s ease, box-shadow 0.15s ease', cursor: 'pointer', boxShadow: '0 2px 4px rgba(0,0,0,0.02)' }}
-                    onMouseEnter={(e) => { e.currentTarget.style.transform = 'translateY(-3px)'; e.currentTarget.style.boxShadow = '0 12px 20px -5px rgba(0,0,0,0.08)'; }}
-                    onMouseLeave={(e) => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = '0 2px 4px rgba(0,0,0,0.02)'; }}
-                  >
-                    <div>
-                      {/* Status & Category Bar */}
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
-                        {issue.category ? (
-                          <span style={{ fontSize: '0.72rem', fontWeight: 700, textTransform: 'uppercase', color: '#475569', backgroundColor: '#f1f5f9', padding: '0.2rem 0.6rem', borderRadius: '6px' }}>
-                            {issue.category}
-                          </span>
-                        ) : <div />}
-                        <span style={{ fontSize: '0.72rem', fontWeight: 700, color: status.color, backgroundColor: status.bg, border: `1px solid ${status.border}`, padding: '0.2rem 0.6rem', borderRadius: '20px', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                          <span>{status.icon}</span> {status.label}
-                        </span>
-                      </div>
+              
+              // Dynamic Picture Auto-Detection
+              const issueImg = issue.image || issue.image_url || issue.picture || issue.media || (Array.isArray(issue.photos) ? issue.photos[0] : null);
 
-                      {/* Title & Summary */}
-                      <h3 style={{ fontSize: '1.1rem', fontWeight: 700, color: '#0f172a', margin: '0 0 0.5rem', lineHeight: '1.35' }}>
-                        {issue.title}
-                      </h3>
-                      {issue.summary && (
-                        <p style={{ fontSize: '0.85rem', color: '#64748b', margin: '0 0 1rem', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
-                          {issue.summary}
-                        </p>
-                      )}
+              // Multi-Report Counter Logic
+              const reportCount = 
+                issue.reports_count ?? 
+                issue.report_count ?? 
+                issue.reported_by_count ?? 
+                issue.duplicate_count ??
+                (Array.isArray(issue.reports) ? issue.reports.length : undefined) ?? 
+                (Array.isArray(issue.reported_by) ? issue.reported_by.length : undefined) ?? 
+                (Array.isArray(issue.user_ids) ? issue.user_ids.length : 1);
+
+              return (
+                <div key={issue._id} className="bg-white border border-slate-200/90 rounded-2xl p-4 h-full flex flex-col justify-between hover:shadow-md transition-all duration-200">
+                  
+                  <div>
+                    {/* Top Badges Bar */}
+                    <div className="flex items-center justify-between gap-2 mb-3">
+                      {issue.category ? (
+                        <span className="text-[10px] font-extrabold uppercase px-2.5 py-1 rounded-md bg-slate-100 text-slate-700 tracking-wider">
+                          {issue.category}
+                        </span>
+                      ) : <div />}
+                      
+                      <span 
+                        className="text-[10px] font-bold px-2.5 py-1 rounded-full flex items-center gap-1 border"
+                        style={{ color: status.color, backgroundColor: status.bg, borderColor: status.border }}
+                      >
+                        <span>{status.icon}</span> {status.label}
+                      </span>
                     </div>
 
-                    {/* Location Footer */}
-                    <div style={{ paddingTop: '0.75rem', borderTop: '1px solid #f1f5f9', fontSize: '0.8rem', color: '#64748b', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                    {/* Fixed Height Suitable Image Preview */}
+                    {issueImg && (
+                      <div className="w-full h-40 mb-3 rounded-xl overflow-hidden bg-slate-100 border border-slate-100 relative">
+                        <img 
+                          src={issueImg} 
+                          alt={issue.title}
+                          className="w-full h-full object-cover" 
+                        />
+                      </div>
+                    )}
+
+                    {/* Title & Summary */}
+                    <h3 className="text-sm font-bold text-slate-900 leading-snug mb-1 line-clamp-2">
+                      {issue.title}
+                    </h3>
+                    
+                    {issue.summary && (
+                      <p className="text-xs text-slate-500 leading-relaxed mb-3 line-clamp-2 font-normal">
+                        {issue.summary}
+                      </p>
+                    )}
+                  </div>
+
+                  {/* Clean Footer: Location & Accurate Reported Count */}
+                  <div className="pt-3 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500 mt-2">
+                    <div className="flex items-center gap-1 overflow-hidden pr-2">
                       <span>📍</span>
-                      <span style={{ fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      <span className="font-medium truncate text-[11px]">
                         {getLocationStr(issue)}
                       </span>
                     </div>
 
+                    {/* Dynamic Reported Count Badge */}
+                    <span className="text-[11px] font-semibold text-slate-700 bg-slate-100 px-2 py-0.5 rounded-md whitespace-nowrap border border-slate-200/60">
+                      👥 Reported by {reportCount} {reportCount === 1 ? 'person' : 'people'}
+                    </span>
                   </div>
-                </Link>
+
+                </div>
               );
             })}
           </div>
