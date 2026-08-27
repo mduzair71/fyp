@@ -721,9 +721,13 @@ from bson import ObjectId
 
 from routes.auth import require_admin, get_current_user, log_audit_action
 from models.issue import CATEGORY_DEPARTMENT_MAP
+from utils.uploads import validate_upload
+from services.email_service import send_email
+
+
 from utils.scope import has_scope_access, scoped_issue_query
 from utils.ai_analyzer import analyze_issue, check_duplicate_with_ai
-from utils.uploads import validate_upload
+
 from utils.issue_helpers import (
     identify_viewer,
     serialize_issue,
@@ -740,16 +744,31 @@ import uuid
 from datetime import datetime
 
 router = APIRouter()
+FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:3000")
+# ALLOWED_STATUSES = {"PENDING", "IN_PROGRESS", "RESOLVED", "REJECTED"}
 
-ALLOWED_STATUSES = {"PENDING", "IN_PROGRESS", "RESOLVED", "REJECTED"}
+# STATUS_TRANSITIONS = {
+#     "PENDING": {"IN_PROGRESS", "REJECTED"},
+#     "IN_PROGRESS": {"RESOLVED", "REJECTED"},
+#     "RESOLVED": set(),
+#     "REJECTED": set(),
+# }
+ALLOWED_STATUSES = {
+    "PENDING", "IN_PROGRESS", "RESOLUTION_SUBMITTED", "RESOLVED", "REJECTED", "REOPENED"
+}
 
 STATUS_TRANSITIONS = {
     "PENDING": {"IN_PROGRESS", "REJECTED"},
-    "IN_PROGRESS": {"RESOLVED", "REJECTED"},
+    "IN_PROGRESS": {"RESOLUTION_SUBMITTED", "REJECTED"},
+    "RESOLUTION_SUBMITTED": {"RESOLVED", "REOPENED"},
+    "REOPENED": {"IN_PROGRESS"},
     "RESOLVED": set(),
     "REJECTED": set(),
 }
 
+# Yeh statuses sirf system khud set kar sakta hai (verify_resolution ke andar) --
+# admin manually inhe "PATCH /issues/{id}/status" se set nahi kar sakta.
+SYSTEM_ONLY_STATUSES = {"RESOLVED", "REOPENED"}
 def serialize_issue(issue: dict) -> dict:
     issue["_id"] = str(issue["_id"])
     if issue.get("created_at"):
@@ -1136,6 +1155,13 @@ def update_issue_status(
     try:
         if status not in ALLOWED_STATUSES:
             raise HTTPException(status_code=400, detail=f"Invalid status. Must be one of {sorted(ALLOWED_STATUSES)}")
+
+        if status in SYSTEM_ONLY_STATUSES:
+            raise HTTPException(
+                status_code=403,
+                detail="This status can only be set through the resolution-verification flow, not manually.",
+            )
+
         issue = issues_collection.find_one({"_id": ObjectId(issue_id), "is_deleted": {"$ne": True}})
         if not issue:
             raise HTTPException(status_code=404, detail="Issue not found")
@@ -1173,6 +1199,63 @@ def update_issue_status(
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+# @router.patch("/issues/{issue_id}/status")
+# def update_issue_status(
+#     issue_id: str,
+#     status: str = Form(...),
+#     note: str = Form(None),
+#     admin=Depends(require_admin),
+# ):
+#     try:
+#         # if status not in ALLOWED_STATUSES:
+#         #     raise HTTPException(status_code=400, detail=f"Invalid status. Must be one of {sorted(ALLOWED_STATUSES)}")
+#         # issue = issues_collection.find_one({"_id": ObjectId(issue_id), "is_deleted": {"$ne": True}})
+#                 if status not in ALLOWED_STATUSES:
+#             raise HTTPException(status_code=400, detail=f"Invalid status. Must be one of {sorted(ALLOWED_STATUSES)}")
+
+#         if status in SYSTEM_ONLY_STATUSES:
+#             raise HTTPException(
+#                 status_code=403,
+#                 detail="This status can only be set through the resolution-verification flow, not manually.",
+#             )
+
+#         issue = issues_collection.find_one({"_id": ObjectId(issue_id), "is_deleted": {"$ne": True}})
+#         if not issue:
+#             raise HTTPException(status_code=404, detail="Issue not found")
+#         if not has_scope_access(admin, issue):
+#             raise HTTPException(status_code=403, detail="Not authorized for this department/area")
+
+#         current = issue.get("status") or "PENDING"
+#         allowed = STATUS_TRANSITIONS.get(current, set())
+#         if status not in allowed and status != current:
+#             raise HTTPException(status_code=422, detail=f"Cannot change status from {current} to {status}")
+
+#         history_entry = {
+#             "status": status,
+#             "updated_at": datetime.utcnow(),
+#             "updated_by": admin.get("user_id"),
+#             "note": note or f"Status changed to {status}",
+#         }
+#         issues_collection.update_one(
+#             {"_id": ObjectId(issue_id)},
+#             {"$set": {"status": status}, "$push": {"status_history": history_entry}},
+#         )
+#         log_audit_action(
+#             performed_by=admin.get("user_id"),
+#             role=admin.get("role"),
+#             action="STATUS_UPDATE",
+#             target_type="issue",
+#             target_id=issue_id,
+#             previous_val={"status": current},
+#             new_val={"status": status},
+#         )
+#         notify(issue.get("created_by"), "Status Changed", f"Issue \"{issue.get('title')}\" is now {status}.", issue_id)
+
+#         return {"message": "Status & Timeline updated successfully", "status": status}
+#     except HTTPException:
+#         raise
+#     except Exception as e:
+#         raise HTTPException(status_code=500, detail=str(e))
 
 # =====================================================================
 # DELETE ISSUE
@@ -1257,3 +1340,210 @@ def add_comment(issue_id: str, message: str = Form(...), current_user=Depends(ge
     notify(issue.get("created_by"), "New Comment", f"{comment['name']} commented on your report.", issue_id)
     comment["created_at"] = str(comment["created_at"])
     return {"message": "Comment added", "data": comment}
+    # =====================================================================
+# UPLOAD RESOLUTION EVIDENCE (Admin) -- status ko RESOLUTION_SUBMITTED
+# banata hai, RESOLVED kabhi nahi. Website + Email dono notification
+# citizen ko yahin se jaati hain.
+# =====================================================================
+@router.post("/issues/{issue_id}/resolution-evidence")
+async def upload_resolution_evidence(
+    issue_id: str,
+    file: UploadFile = File(...),
+    note: str = Form(None),
+    admin=Depends(require_admin),
+):
+    try:
+        issue = issues_collection.find_one({"_id": ObjectId(issue_id), "is_deleted": {"$ne": True}})
+        if not issue:
+            raise HTTPException(status_code=404, detail="Issue not found")
+        if not has_scope_access(admin, issue):
+            raise HTTPException(status_code=403, detail="Not authorized for this department/area")
+
+        current = issue.get("status") or "PENDING"
+        if current != "IN_PROGRESS":
+            raise HTTPException(
+                status_code=422,
+                detail=f"Resolution evidence can only be submitted while the issue is IN_PROGRESS (current: {current})",
+            )
+
+        content = await file.read()
+        try:
+            ext = validate_upload(file.filename, file.content_type, len(content))
+        except ValueError as ve:
+            raise HTTPException(status_code=422, detail=str(ve))
+        os.makedirs("uploads", exist_ok=True)
+        unique_filename = f"{uuid.uuid4()}{ext}"
+        file_path = f"uploads/{unique_filename}"
+        with open(file_path, "wb") as buffer:
+            buffer.write(content)
+
+        history_entry = {
+            "status": "RESOLUTION_SUBMITTED",
+            "updated_at": datetime.utcnow(),
+            "updated_by": admin.get("user_id"),
+            "note": note or "Department submitted resolution evidence, awaiting citizen verification",
+        }
+        issues_collection.update_one(
+            {"_id": ObjectId(issue_id)},
+            {
+                "$set": {"status": "RESOLUTION_SUBMITTED", "resolution_photo_url": file_path},
+                "$push": {"status_history": history_entry},
+            },
+        )
+
+        log_audit_action(
+            performed_by=admin.get("user_id"),
+            role=admin.get("role"),
+            action="RESOLUTION_EVIDENCE_SUBMITTED",
+            target_type="issue",
+            target_id=issue_id,
+            previous_val={"status": current},
+            new_val={"status": "RESOLUTION_SUBMITTED"},
+        )
+
+        # ---- 🔔 Website notification (existing notify() helper) ----
+        notify(
+            issue.get("created_by"),
+            "Resolution Submitted -- Please Verify",
+            f'The department has submitted evidence that "{issue.get("title")}" has been resolved. Please confirm.',
+            issue_id,
+        )
+
+        # ---- 📧 Email notification ----
+        citizen = users_collection.find_one({"_id": ObjectId(issue.get("created_by"))})
+        citizen_email = citizen.get("email") if citizen else None
+        if citizen_email:
+            verify_link = f"{FRONTEND_URL}/issues/{issue_id}/verify"
+            send_email(
+                citizen_email,
+                "Your FixMyCity Complaint Needs Verification",
+                f"""
+                <p>Assalam-o-Alaikum {citizen.get('name', '')},</p>
+                <p>The department has submitted evidence that your reported issue
+                <b>"{issue.get('title')}"</b> has been resolved.</p>
+                <p>Please review the resolution and confirm whether the issue is actually fixed.</p>
+                <p><a href="{verify_link}" style="background:#2563eb;color:#fff;padding:10px 18px;
+                   text-decoration:none;border-radius:6px;">Verify Resolution</a></p>
+                <p>If the issue is not fixed, you can reject it and provide feedback on the same page.</p>
+                """,
+            )
+
+        return {"message": "Resolution evidence submitted, awaiting citizen verification", "status": "RESOLUTION_SUBMITTED"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# =====================================================================
+# VERIFY RESOLUTION (Citizen) -- sirf yehi endpoint RESOLVED ya
+# REOPENED set kar sakta hai. Admin ka manual control yahan nahi hai.
+# =====================================================================
+@router.post("/issues/{issue_id}/verify")
+async def verify_resolution(
+    issue_id: str,
+    resolved: str = Form(...),
+    feedback: str = Form(None),
+    file: UploadFile = File(None),
+    current_user=Depends(get_current_user),
+):
+    try:
+        issue = issues_collection.find_one({"_id": ObjectId(issue_id), "is_deleted": {"$ne": True}})
+        if not issue:
+            raise HTTPException(status_code=404, detail="Issue not found")
+
+        if issue.get("created_by") != current_user.get("user_id"):
+            raise HTTPException(status_code=403, detail="Only the original reporter can verify this issue's resolution")
+
+        current = issue.get("status") or "PENDING"
+        if current != "RESOLUTION_SUBMITTED":
+            raise HTTPException(
+                status_code=422,
+                detail=f"This issue is not awaiting verification (current status: {current})",
+            )
+
+        confirmed = str(resolved).lower() in ("true", "1", "yes")
+        new_status = "RESOLVED" if confirmed else "REOPENED"
+
+        verification_photo_url = None
+        if file and file.filename:
+            content = await file.read()
+            try:
+                ext = validate_upload(file.filename, file.content_type, len(content))
+            except ValueError as ve:
+                raise HTTPException(status_code=422, detail=str(ve))
+            os.makedirs("uploads", exist_ok=True)
+            unique_filename = f"{uuid.uuid4()}{ext}"
+            file_path = f"uploads/{unique_filename}"
+            with open(file_path, "wb") as buffer:
+                buffer.write(content)
+            verification_photo_url = file_path
+
+        history_entry = {
+            "status": new_status,
+            "updated_at": datetime.utcnow(),
+            "updated_by": current_user.get("user_id"),
+            "note": feedback or ("Citizen confirmed the issue is resolved" if confirmed else "Citizen reported the issue is still unresolved"),
+        }
+
+        update_fields = {"status": new_status}
+        if verification_photo_url:
+            update_fields["verification_photo_url"] = verification_photo_url
+        if feedback:
+            update_fields["verification_feedback"] = feedback
+
+        issues_collection.update_one(
+            {"_id": ObjectId(issue_id)},
+            {"$set": update_fields, "$push": {"status_history": history_entry}},
+        )
+
+        log_audit_action(
+            performed_by=current_user.get("user_id"),
+            role=current_user.get("role"),
+            action="RESOLUTION_VERIFIED" if confirmed else "RESOLUTION_REJECTED",
+            target_type="issue",
+            target_id=issue_id,
+            previous_val={"status": "RESOLUTION_SUBMITTED"},
+            new_val={"status": new_status},
+        )
+
+        # Jis admin ne evidence submit ki thi usay dhoondo, taake notify kar sakein
+        last_admin_action = next(
+            (h.get("updated_by") for h in reversed(issue.get("status_history") or []) if h.get("status") == "RESOLUTION_SUBMITTED"),
+            None,
+        )
+
+        if last_admin_action:
+            # ---- 🔔 Website notification (admin) ----
+            if confirmed:
+                notify(last_admin_action, "Resolution Confirmed", f'Citizen confirmed "{issue.get("title")}" is resolved.', issue_id)
+            else:
+                notify(last_admin_action, "Resolution Rejected", f'Citizen reported "{issue.get("title")}" is still unresolved. Please review.', issue_id)
+
+            # ---- 📧 Email notification (admin) ----
+            admin_user = users_collection.find_one({"_id": ObjectId(last_admin_action)})
+            admin_email = admin_user.get("email") if admin_user else None
+            if admin_email:
+                if confirmed:
+                    send_email(
+                        admin_email,
+                        "Resolution Confirmed by Citizen",
+                        f'<p>Citizen confirmed that issue <b>"{issue.get("title")}"</b> has been resolved.</p>',
+                    )
+                else:
+                    issue_link = f"{FRONTEND_URL}/admin/issues/{issue_id}"
+                    send_email(
+                        admin_email,
+                        "Resolution Rejected -- Action Needed",
+                        f'''
+                        <p>Citizen reported that issue <b>"{issue.get("title")}"</b> is still unresolved.</p>
+                        <p><b>Feedback:</b> {feedback or "No additional feedback provided."}</p>
+                        <p><a href="{issue_link}">View Issue</a></p>
+                        ''',
+                    )
+
+        return {"message": "Verification recorded", "status": new_status}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))

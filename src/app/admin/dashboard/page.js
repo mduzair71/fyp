@@ -972,7 +972,9 @@ import {
 const STATUS_THEME = {
   PENDING: { label: 'PENDING', bg: 'bg-amber-100', text: 'text-amber-800', border: 'border-amber-300' },
   IN_PROGRESS: { label: 'IN PROGRESS', bg: 'bg-blue-100', text: 'text-blue-800', border: 'border-blue-300' },
+  RESOLUTION_SUBMITTED: { label: 'AWAITING VERIFICATION', bg: 'bg-purple-100', text: 'text-purple-800', border: 'border-purple-300' },
   RESOLVED: { label: 'RESOLVED', bg: 'bg-emerald-100', text: 'text-emerald-800', border: 'border-emerald-300' },
+  REOPENED: { label: 'REOPENED', bg: 'bg-orange-100', text: 'text-orange-800', border: 'border-orange-300' },
   REJECTED: { label: 'REJECTED', bg: 'bg-red-100', text: 'text-red-800', border: 'border-red-300' },
 };
 
@@ -984,11 +986,12 @@ const PRIORITY_THEME = {
 
 const NEXT_STATUS_OPTIONS = {
   PENDING: ['PENDING', 'IN_PROGRESS', 'REJECTED'],
-  IN_PROGRESS: ['IN_PROGRESS', 'RESOLVED', 'REJECTED'],
+  IN_PROGRESS: ['IN_PROGRESS', 'REJECTED'], // RESOLVED ab yahan nahi -- evidence upload se hoga
+  RESOLUTION_SUBMITTED: ['RESOLUTION_SUBMITTED'], // citizen ke faisle ka wait, admin kuch nahi kar sakta
   RESOLVED: ['RESOLVED'],
+  REOPENED: ['REOPENED'], // admin ko wapas IN_PROGRESS le jane ka alag button milega
   REJECTED: ['REJECTED'],
 };
-
 function StatWave({ strokeColor }) {
   return (
     <svg viewBox="0 0 120 20" className="w-full h-5 mt-3 opacity-80" preserveAspectRatio="none">
@@ -1014,7 +1017,10 @@ export default function SubAdminDashboard() {
   const [search, setSearch] = useState('');
   const [selectedIssue, setSelectedIssue] = useState(null);
   const [updatingId, setUpdatingId] = useState(null);
-
+const [evidenceModalIssue, setEvidenceModalIssue] = useState(null);
+const [evidenceFile, setEvidenceFile] = useState(null);
+const [evidenceNote, setEvidenceNote] = useState('');
+const [uploadingEvidence, setUploadingEvidence] = useState(false);
   const fetchDepartmentIssues = async () => {
     try {
       setLoading(true);
@@ -1116,7 +1122,41 @@ export default function SubAdminDashboard() {
       timeStyle: 'short'
     });
   };
+const handleUploadEvidence = async () => {
+  if (!evidenceFile) {
+    alert('Please attach a photo as evidence before submitting.');
+    return;
+  }
+  setUploadingEvidence(true);
+  try {
+    const formData = new FormData();
+    formData.append('file', evidenceFile);
+    if (evidenceNote) formData.append('note', evidenceNote);
 
+    await axios.post(
+      `http://localhost:8000/issues/${evidenceModalIssue._id}/resolution-evidence`,
+      formData,
+      { withCredentials: true }
+    );
+
+    setEvidenceModalIssue(null);
+    setEvidenceFile(null);
+    setEvidenceNote('');
+    if (selectedIssue && selectedIssue._id === evidenceModalIssue._id) {
+      setSelectedIssue(prev => ({ ...prev, status: 'RESOLUTION_SUBMITTED' }));
+    }
+    fetchDepartmentIssues();
+  } catch (err) {
+    alert(err.response?.data?.detail || 'Failed to submit resolution evidence');
+  } finally {
+    setUploadingEvidence(false);
+  }
+};
+
+const handleReactivateIssue = async (issueId) => {
+  // REOPENED se wapas IN_PROGRESS -- yeh normal status endpoint se allowed hai
+  await handleUpdateStatus(issueId, 'IN_PROGRESS');
+};
   return (
    <div className="w-screen min-h-screen bg-[#F3F4F6] text-slate-800 font-sans p-4 sm:p-6 lg:p-8 m-0 overflow-x-hidden">
       <div className="w-full max-w-none mx-auto space-y-6">
@@ -1330,7 +1370,7 @@ export default function SubAdminDashboard() {
                         {th.label}
                       </span>
 
-                      <select
+                      {/* <select
                         value={issue.status}
                         disabled={updatingId === issue._id}
                         onChange={(e) => handleUpdateStatus(issue._id, e.target.value)}
@@ -1339,7 +1379,41 @@ export default function SubAdminDashboard() {
                         {(NEXT_STATUS_OPTIONS[issue.status] || ['PENDING', 'IN_PROGRESS', 'RESOLVED', 'REJECTED']).map((st) => (
                           <option key={st} value={st}>{st.replace('_', ' ')}</option>
                         ))}
-                      </select>
+                      </select> */}
+                      {issue.status === 'RESOLUTION_SUBMITTED' ? (
+  <span className="px-3 py-1.5 bg-purple-50 text-purple-700 border border-purple-200 rounded-xl text-xs font-semibold">
+    Awaiting citizen verification
+  </span>
+) : (
+  <select
+    value={issue.status}
+    disabled={updatingId === issue._id}
+    onChange={(e) => handleUpdateStatus(issue._id, e.target.value)}
+    className="px-3 py-1.5 bg-white border border-slate-200 rounded-xl text-xs font-semibold text-slate-700 focus:outline-none focus:border-emerald-500 shadow-sm cursor-pointer"
+  >
+    {(NEXT_STATUS_OPTIONS[issue.status] || ['PENDING', 'IN_PROGRESS', 'REJECTED']).map((st) => (
+      <option key={st} value={st}>{st.replace('_', ' ')}</option>
+    ))}
+  </select>
+)}
+
+{issue.status === 'IN_PROGRESS' && (
+  <button
+    onClick={() => setEvidenceModalIssue(issue)}
+    className="flex items-center gap-1 px-3 py-1.5 bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-200 rounded-xl text-xs font-semibold transition-colors cursor-pointer"
+  >
+    <CheckCircleIcon className="w-4 h-4" /> Upload Evidence
+  </button>
+)}
+
+{issue.status === 'REOPENED' && (
+  <button
+    onClick={() => handleReactivateIssue(issue._id)}
+    className="flex items-center gap-1 px-3 py-1.5 bg-orange-50 hover:bg-orange-100 text-orange-700 border border-orange-200 rounded-xl text-xs font-semibold transition-colors cursor-pointer"
+  >
+    <Cog6ToothIcon className="w-4 h-4" /> Resume Work
+  </button>
+)}
 
                       <button
                         onClick={() => setSelectedIssue(issue)}
@@ -1466,21 +1540,46 @@ export default function SubAdminDashboard() {
             </div>
 
             <div className="border-t border-slate-100 pt-4 mt-4 flex flex-wrap justify-between items-center gap-3">
-              <div className="flex gap-1.5 flex-wrap">
-                {['PENDING', 'IN_PROGRESS', 'RESOLVED', 'REJECTED'].map((st) => (
-                  <button
-                    key={st}
-                    onClick={() => handleUpdateStatus(selectedIssue._id, st)}
-                    className={`px-3 py-1.5 rounded-xl text-xs font-bold capitalize transition-all border cursor-pointer ${
-                      selectedIssue.status === st
-                        ? 'bg-emerald-600 text-white border-emerald-600 shadow-sm'
-                        : 'bg-white text-slate-600 border-slate-200 hover:border-slate-300'
-                    }`}
-                  >
-                    {st.replace('_', ' ')}
-                  </button>
-                ))}
-              </div>
+            <div className="flex gap-1.5 flex-wrap">
+  {['PENDING', 'IN_PROGRESS', 'REJECTED'].map((st) => (
+    <button
+      key={st}
+      onClick={() => handleUpdateStatus(selectedIssue._id, st)}
+      disabled={selectedIssue.status === 'RESOLUTION_SUBMITTED'}
+      className={`px-3 py-1.5 rounded-xl text-xs font-bold capitalize transition-all border cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed ${
+        selectedIssue.status === st
+          ? 'bg-emerald-600 text-white border-emerald-600 shadow-sm'
+          : 'bg-white text-slate-600 border-slate-200 hover:border-slate-300'
+      }`}
+    >
+      {st.replace('_', ' ')}
+    </button>
+  ))}
+
+  {selectedIssue.status === 'IN_PROGRESS' && (
+    <button
+      onClick={() => setEvidenceModalIssue(selectedIssue)}
+      className="px-3 py-1.5 rounded-xl text-xs font-bold bg-purple-600 text-white border border-purple-600 shadow-sm cursor-pointer"
+    >
+      Upload Resolution Evidence
+    </button>
+  )}
+
+  {selectedIssue.status === 'RESOLUTION_SUBMITTED' && (
+    <span className="px-3 py-1.5 rounded-xl text-xs font-bold bg-purple-50 text-purple-700 border border-purple-200">
+      Awaiting citizen verification
+    </span>
+  )}
+
+  {selectedIssue.status === 'REOPENED' && (
+    <button
+      onClick={() => handleReactivateIssue(selectedIssue._id)}
+      className="px-3 py-1.5 rounded-xl text-xs font-bold bg-orange-600 text-white border border-orange-600 shadow-sm cursor-pointer"
+    >
+      Resume Work (IN_PROGRESS)
+    </button>
+  )}
+</div>
               <button
                 onClick={() => setSelectedIssue(null)}
                 className="px-4 py-2 bg-slate-100 text-slate-700 hover:bg-slate-200 rounded-xl text-xs font-bold transition-colors cursor-pointer border-0"
@@ -1490,8 +1589,71 @@ export default function SubAdminDashboard() {
             </div>
           </div>
         </div>
+        
       )}
+{/* 6. UPLOAD RESOLUTION EVIDENCE MODAL */}
+{evidenceModalIssue && (
+  <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[60] flex items-center justify-center p-4">
+    <div className="bg-white border border-slate-200 rounded-3xl max-w-md w-full p-6 shadow-2xl">
+      <div className="flex justify-between items-start mb-4">
+        <div>
+          <h2 className="text-lg font-black text-slate-900">Upload Resolution Evidence</h2>
+          <p className="text-xs text-slate-500 mt-1">{evidenceModalIssue.title}</p>
+        </div>
+        <button
+          onClick={() => { setEvidenceModalIssue(null); setEvidenceFile(null); setEvidenceNote(''); }}
+          className="p-1 rounded-full text-slate-400 hover:text-slate-700 hover:bg-slate-100 cursor-pointer border-0"
+        >
+          <XMarkIcon className="w-6 h-6" />
+        </button>
+      </div>
 
+      <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 text-xs text-amber-800 mb-4">
+        ⚠️ Uploading evidence will NOT mark the issue as resolved directly. The citizen must review and confirm before it's marked RESOLVED.
+      </div>
+
+      <div className="space-y-3">
+        <div>
+          <label className="text-[11px] font-bold text-slate-400 tracking-wider block mb-1 uppercase">Photo Evidence (required)</label>
+          <input
+            type="file"
+            accept="image/*"
+            onChange={(e) => setEvidenceFile(e.target.files[0])}
+            className="w-full text-sm text-slate-600 file:mr-3 file:py-2 file:px-3 file:rounded-lg file:border-0 file:bg-emerald-50 file:text-emerald-700 file:text-xs file:font-semibold"
+          />
+        </div>
+
+        <div>
+          <label className="text-[11px] font-bold text-slate-400 tracking-wider block mb-1 uppercase">Note (optional)</label>
+          <textarea
+            value={evidenceNote}
+            onChange={(e) => setEvidenceNote(e.target.value)}
+            placeholder="Describe what was fixed..."
+            rows={3}
+            className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-800 placeholder-slate-400 focus:outline-none focus:border-emerald-500 focus:bg-white transition-all resize-none"
+          />
+        </div>
+      </div>
+
+      <div className="flex justify-end gap-2 mt-5">
+        <button
+          onClick={() => { setEvidenceModalIssue(null); setEvidenceFile(null); setEvidenceNote(''); }}
+          className="px-4 py-2 bg-slate-100 text-slate-700 hover:bg-slate-200 rounded-xl text-xs font-bold cursor-pointer border-0"
+        >
+          Cancel
+        </button>
+        <button
+          onClick={handleUploadEvidence}
+          disabled={uploadingEvidence}
+          className="px-4 py-2 bg-purple-600 text-white hover:bg-purple-700 rounded-xl text-xs font-bold cursor-pointer border-0 disabled:opacity-50"
+        >
+          {uploadingEvidence ? 'Submitting...' : 'Submit for Verification'}
+        </button>
+      </div>
     </div>
+  </div>
+)}
+    </div>
+    
   );
 }

@@ -35,7 +35,7 @@ export default function Navbar() {
 
   const handleLogout = async () => {
     try {
-      await axios.post('http://localhost:8000/auth/logout', {}, { withCredentials: true });
+      await axios.post('http://10.248.141.146:8000/auth/logout', {}, { withCredentials: true });
     } catch (err) {
       console.error(err);
     } finally {
