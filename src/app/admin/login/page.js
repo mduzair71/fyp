@@ -25,6 +25,7 @@ export default function AdminLoginPage() {
 
     try {
       const response = await fetch('http://localhost:8000/auth/login', {
+      // const response = await fetch('http://10.248.141.146:8000/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',

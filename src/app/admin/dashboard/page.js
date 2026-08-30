@@ -219,7 +219,7 @@ const handleReactivateIssue = async (issueId) => {
             <div className="w-10 h-10 rounded-xl bg-[#059669] text-white flex items-center justify-center font-black text-xl shadow-md">
               M
             </div>
-            <span className="font-bold text-xl tracking-wide">Mahol<span className="text-[#10B981]">Ai</span></span>
+            <span className="font-bold text-xl tracking-wide">FixMy<span className="text-[#10B981]">city</span></span>
             <span className="ml-2 px-3 py-1 bg-[#334155] text-gray-200 text-xs font-bold rounded-lg tracking-wider uppercase">
               {adminInfo.department} ADMIN
             </span>
@@ -534,9 +534,9 @@ const handleReactivateIssue = async (issueId) => {
                   <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1 flex items-center gap-1">
                     <BuildingStorefrontIcon className="w-3.5 h-3.5 text-emerald-600" /> Nearest Landmark
                   </p>
-                  <p className="text-slate-900 font-bold">
-                    {selectedIssue.landmark || 'No specific landmark provided'}
-                  </p>
+                 <p className="text-slate-900 font-bold">
+  {selectedIssue.location?.landmark || 'No specific landmark provided'}
+</p>
                 </div>
               </div>
 
@@ -573,7 +573,9 @@ const handleReactivateIssue = async (issueId) => {
                   </p>
                   <p className="text-slate-900 font-mono font-medium">{selectedIssue.reporter_cnic || 'N/A'}</p>
                 </div>
-                <div>
+                  
+                         
+                 <div>
                   <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-0.5 flex items-center gap-1">
                     <MapPinIcon className="w-3.5 h-3.5" /> Area / Location
                   </p>
@@ -583,7 +585,7 @@ const handleReactivateIssue = async (issueId) => {
                   <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-0.5">Current Status</p>
                   <span className="font-bold capitalize text-emerald-700">{selectedIssue.status}</span>
                 </div>
-              </div>
+              </div> 
 
               {/* EVIDENCE PHOTO */}
               {selectedIssue.photo_url && (

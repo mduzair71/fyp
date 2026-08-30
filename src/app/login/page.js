@@ -1,3 +1,4 @@
+
 // 'use client';
 
 // import { useState } from 'react';
@@ -16,157 +17,13 @@
 //     setFormData({ ...formData, [e.target.name]: e.target.value });
 //   };
 
-//   const handleSubmit = async (e) => {
-//     e.preventDefault();
-//     setLoading(true);
-//     setError('');
-
-//     try {
-//       const response = await fetch('http://localhost:8000/auth/login', {
-//         method: 'POST',
-//         headers: { 'Content-Type': 'application/json' },
-//         credentials: 'include',
-//         body: JSON.stringify(formData)
-//       });
-
-//       const result = await response.json();
-
-//       if (response.ok) {
-//         // Strictly block admins from logging in through public portal
-//         if (result.role === 'super_admin' || result.role === 'sub_admin' || result.role === 'admin') {
-//           setError('Access Denied — Departmental Administrators must use the Admin Portal.');
-//           setLoading(false);
-//           return;
-//         }
-
-//         // Store session for citizen
-//         localStorage.setItem('user_id', result.user_id);
-//         localStorage.setItem('name', result.name);
-//         localStorage.setItem('user_name', result.name);
-//         localStorage.setItem('role', result.role);
-//         if (result.area) localStorage.setItem('area', result.area);
-//         if (result.district) localStorage.setItem('district', result.district);
-
-//         window.location.href = '/';
-//       } else {
-//         setError(result.detail || 'Login failed');
-//       }
-//     } catch (err) {
-//       setError('Something went wrong');
-//     } finally {
-//       setLoading(false);
+//   // Dynamic API Base URL detection (Mobile IP vs Localhost for Port 8000)
+//   const getBackendUrl = () => {
+//     if (typeof window !== 'undefined') {
+//       const hostname = window.location.hostname;
+//       return `http://${hostname}:8000`; // Points strictly to Python FastAPI Backend
 //     }
-//   };
-
-//   return (
-//     <div className="min-h-screen w-full flex items-center justify-center bg-gradient-to-br from-emerald-950 via-green-950 to-emerald-900 px-4 py-10">
-//       <div className="w-full max-w-sm bg-white rounded-2xl shadow-2xl px-7 py-8">
-
-//         {/* Logo */}
-//         <div className="flex flex-col items-center mb-5">
-//           <div className="w-16 h-16 rounded-full border-2 border-emerald-500 flex items-center justify-center text-3xl mb-2">
-//             🌿
-//           </div>
-//           <span className="font-extrabold text-sm tracking-wide text-gray-900">FixMy<span className="text-emerald-600">City</span></span>
-//           <span className="text-[10px] text-gray-400 tracking-wide">Civic Reporting Platform</span>
-//         </div>
-
-//         <h1 className="text-xl font-bold text-gray-900 text-center mb-1">Citizen Login</h1>
-//         <p className="text-gray-500 text-xs text-center mb-5">Login with your CNIC to continue.</p>
-
-//         {error && (
-//           <div className="bg-red-50 border-l-4 border-red-400 px-3 py-2 mb-4 rounded-lg">
-//             <p className="text-red-600 text-xs font-medium">{error}</p>
-//           </div>
-//         )}
-
-//         <form onSubmit={handleSubmit} className="space-y-3">
-
-//           {/* CNIC / Username */}
-//           <div className="relative">
-//             <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm">🪪</span>
-//             <input
-//               type="text"
-//               name="cnic"
-//               autoComplete="off"
-//               value={formData.cnic}
-//               onChange={handleChange}
-//               required
-//               placeholder="CNIC (13 digits)"
-//               className="w-full pl-9 pr-3 py-2.5 bg-white border border-gray-200 rounded-lg text-sm text-gray-900 placeholder-gray-400 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-200 focus:outline-none transition-all"
-//             />
-//           </div>
-
-//           {/* Password */}
-//           <div className="relative">
-//             <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm">🔒</span>
-//             <input
-//               type={showPassword ? 'text' : 'password'}
-//               name="password"
-//               autoComplete="off"
-//               value={formData.password}
-//               onChange={handleChange}
-//               required
-//               placeholder="Password"
-//               className="w-full pl-9 pr-9 py-2.5 bg-white border border-gray-200 rounded-lg text-sm text-gray-900 placeholder-gray-400 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-200 focus:outline-none transition-all"
-//             />
-//             <button
-//               type="button"
-//               onClick={() => setShowPassword(!showPassword)}
-//               className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 text-sm bg-transparent border-0 cursor-pointer"
-//             >
-//               {showPassword ? '🙈' : '👁️'}
-//             </button>
-//           </div>
-
-//           <button
-//             type="submit"
-//             disabled={loading}
-//             className={`w-full py-3 rounded-lg text-sm font-bold tracking-wide uppercase transition-all border-0 mt-2 ${
-//               loading
-//                 ? 'bg-emerald-300 text-white cursor-not-allowed'
-//                 : 'bg-emerald-800 hover:bg-emerald-900 text-white cursor-pointer shadow-md'
-//             }`}
-//           >
-//             {loading ? 'Logging in...' : 'Login'}
-//           </button>
-
-//         </form>
-
-//         <p className="text-center text-gray-500 text-xs mt-4">
-//           No account?{' '}
-//           <Link href="/signup" className="text-emerald-700 font-semibold no-underline hover:underline">
-//             Create Account
-//           </Link>
-//         </p>
-
-//         <div className="text-center mt-2">
-//           <Link href="/" className="text-emerald-700 text-xs font-medium no-underline hover:underline">
-//             🏠 Back to Home
-//           </Link>
-//         </div>
-
-//       </div>
-//     </div>
-//   );
-// }
-
-// 'use client';
-
-// import { useState } from 'react';
-// import Link from 'next/link';
-
-// export default function LoginPage() {
-//   const [formData, setFormData] = useState({
-//     cnic: '',
-//     password: ''
-//   });
-//   const [showPassword, setShowPassword] = useState(false);
-//   const [loading, setLoading] = useState(false);
-//   const [error, setError] = useState('');
-
-//   const handleChange = (e) => {
-//     setFormData({ ...formData, [e.target.name]: e.target.value });
+//     return 'http://localhost:8000';
 //   };
 
 //   const handleSubmit = async (e) => {
@@ -175,10 +32,11 @@
 //     setError('');
 
 //     try {
-//       const response = await fetch('http://10.248.141.146:3000/auth/login', {
+//       // FIXED: Request ab Backend Port 8000 par dynamic hostname ke sath jaye gi
+//       const response = await fetch(`${getBackendUrl()}/auth/login`, {
 //         method: 'POST',
 //         headers: { 'Content-Type': 'application/json' },
-//         credentials: 'include',
+//         credentials: 'include', // Session/Cookie attach karega
 //         body: JSON.stringify(formData)
 //       });
 
@@ -205,7 +63,8 @@
 //         setError(result.detail || 'Login failed');
 //       }
 //     } catch (err) {
-//       setError('Something went wrong');
+//       console.error('Login Error:', err);
+//       setError('Connection failed. Make sure backend is running on port 8000.');
 //     } finally {
 //       setLoading(false);
 //     }
@@ -380,11 +239,11 @@ export default function LoginPage() {
     setFormData({ ...formData, [e.target.name]: e.target.value });
   };
 
-  // Dynamic API Base URL detection (Mobile IP vs Localhost for Port 8000)
+  // Dynamic API Base URL detection
   const getBackendUrl = () => {
     if (typeof window !== 'undefined') {
       const hostname = window.location.hostname;
-      return `http://${hostname}:8000`; // Points strictly to Python FastAPI Backend
+      return `http://${hostname}:8000`;
     }
     return 'http://localhost:8000';
   };
@@ -395,25 +254,22 @@ export default function LoginPage() {
     setError('');
 
     try {
-      // FIXED: Request ab Backend Port 8000 par dynamic hostname ke sath jaye gi
       const response = await fetch(`${getBackendUrl()}/auth/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        credentials: 'include', // Session/Cookie attach karega
+        credentials: 'include',
         body: JSON.stringify(formData)
       });
 
       const result = await response.json();
 
       if (response.ok) {
-        // Strictly block admins from logging in through public portal
         if (result.role === 'super_admin' || result.role === 'sub_admin' || result.role === 'admin') {
           setError('Access Denied — Departmental Administrators must use the Admin Portal.');
           setLoading(false);
           return;
         }
 
-        // Store session for citizen
         localStorage.setItem('user_id', result.user_id);
         localStorage.setItem('name', result.name);
         localStorage.setItem('user_name', result.name);
@@ -435,49 +291,56 @@ export default function LoginPage() {
 
   return (
     <div 
-      className="relative min-h-screen w-full bg-cover bg-center bg-no-repeat flex flex-col justify-between p-4 sm:p-8"
+      className="relative min-h-screen w-full bg-cover bg-center bg-no-repeat flex flex-col justify-between p-4 sm:p-8 font-sans antialiased"
       style={{
-        backgroundImage: `linear-gradient(to right, rgba(240, 253, 244, 0.5), rgba(220, 252, 231, 0.3)), url('/hero.jpeg')`
+        backgroundImage: `linear-gradient(to right, rgba(15, 23, 42, 0.45), rgba(6, 78, 59, 0.3)), url('/hero.jpeg')`
       }}
     >
       {/* Container Layout */}
       <div className="max-w-7xl w-full mx-auto grid grid-cols-1 lg:grid-cols-12 gap-8 items-center my-auto py-6">
         
         {/* LEFT SIDE: Heading & Branding */}
-        <div className="lg:col-span-6 space-y-6 text-slate-800 pr-0 lg:pr-6">
+        <div className="lg:col-span-6 space-y-6 pr-0 lg:pr-6">
           
-          <div className="space-y-3">
-            <h1 className="text-4xl sm:text-5xl lg:text-6xl font-black text-slate-900 tracking-tight leading-none">
+          <div className="space-y-4 bg-slate-900/50 backdrop-blur-md p-6 sm:p-8 rounded-3xl border border-white/20 shadow-xl">
+            <span className="inline-flex items-center gap-2 bg-emerald-500/20 text-emerald-300 font-bold text-xs px-3.5 py-1.5 rounded-full border border-emerald-400/30">
+              🌱 FixMyCity Official Portal
+            </span>
+            
+            <h1 className="text-4xl sm:text-5xl lg:text-6xl font-black text-white tracking-tight leading-tight drop-shadow-md">
               Make Your <br />
-              <span className="text-emerald-600">Community Better</span>
+              <span className="text-emerald-400 underline decoration-emerald-500/50 underline-offset-8">
+                Community Better
+              </span>
             </h1>
-            <p className="text-base sm:text-lg text-slate-600 max-w-lg font-medium leading-relaxed">
+            
+            <p className="text-base sm:text-lg text-slate-100 max-w-lg font-medium leading-relaxed drop-shadow">
               Report civic problems. Let AI analyze them. Track their resolution in real-time.
             </p>
           </div>
 
           {/* Feature Badges */}
-          <div className="grid grid-cols-3 gap-3 pt-2 max-w-md">
-            <div className="bg-white/70 backdrop-blur-sm border border-emerald-100 p-3 rounded-2xl flex flex-col items-center text-center shadow-sm">
+          <div className="grid grid-cols-3 gap-3 pt-1 max-w-md">
+            <div className="bg-white/95 backdrop-blur-md border border-slate-200/80 p-3.5 rounded-2xl flex flex-col items-center text-center shadow-md">
               <span className="text-2xl mb-1">⚙️</span>
-              <span className="text-xs font-bold text-slate-800">AI-Powered Analysis</span>
+              <span className="text-xs font-bold text-slate-900">AI-Powered Analysis</span>
             </div>
-            <div className="bg-white/70 backdrop-blur-sm border border-emerald-100 p-3 rounded-2xl flex flex-col items-center text-center shadow-sm">
+            <div className="bg-white/95 backdrop-blur-md border border-slate-200/80 p-3.5 rounded-2xl flex flex-col items-center text-center shadow-md">
               <span className="text-2xl mb-1">📍</span>
-              <span className="text-xs font-bold text-slate-800">Location Intelligence</span>
+              <span className="text-xs font-bold text-slate-900">Location Intelligence</span>
             </div>
-            <div className="bg-white/70 backdrop-blur-sm border border-emerald-100 p-3 rounded-2xl flex flex-col items-center text-center shadow-sm">
+            <div className="bg-white/95 backdrop-blur-md border border-slate-200/80 p-3.5 rounded-2xl flex flex-col items-center text-center shadow-md">
               <span className="text-2xl mb-1">👥</span>
-              <span className="text-xs font-bold text-slate-800">Community Driven</span>
+              <span className="text-xs font-bold text-slate-900">Community Driven</span>
             </div>
           </div>
 
           {/* Banner Card */}
-          <div className="bg-gradient-to-r from-emerald-700 to-emerald-600 text-white p-4 sm:p-5 rounded-2xl shadow-lg flex items-center gap-4 max-w-md">
-            <div className="text-3xl bg-white/20 p-2.5 rounded-xl">🤝</div>
+          <div className="bg-gradient-to-r from-emerald-600 to-emerald-700 text-white p-4 sm:p-5 rounded-2xl shadow-xl border border-emerald-400/30 flex items-center gap-4 max-w-md">
+            <div className="text-3xl bg-white/20 p-2.5 rounded-xl shrink-0">🤝</div>
             <div>
-              <h3 className="font-bold text-sm">Join a smarter city</h3>
-              <p className="text-xs text-emerald-100 mt-0.5">
+              <h3 className="font-extrabold text-sm text-white">Join a smarter city</h3>
+              <p className="text-xs text-emerald-100 font-medium mt-0.5">
                 Together for a cleaner, safer, and better tomorrow.
               </p>
             </div>
@@ -487,92 +350,100 @@ export default function LoginPage() {
 
         {/* RIGHT SIDE: Login Form Card */}
         <div className="lg:col-span-6 flex justify-center lg:justify-end">
-          <div className="w-full max-w-md bg-white rounded-3xl shadow-2xl border border-slate-100 px-6 py-8 sm:px-8 sm:py-9 relative">
+          <div className="w-full max-w-md bg-white rounded-3xl shadow-2xl border border-slate-200/80 px-6 py-8 sm:px-8 sm:py-9 relative">
 
             {/* Header Icon & Brand Title */}
             <div className="flex flex-col items-center mb-6">
-              <div className="w-14 h-14 rounded-full bg-emerald-50 border-2 border-emerald-500/20 flex items-center justify-center text-2xl shadow-sm mb-2">
-                🌱
+              <div className="w-14 h-14 rounded-2xl bg-emerald-50 border-2 border-emerald-500/20 flex items-center justify-center text-2xl shadow-sm mb-3">
+                🏙️
               </div>
-              <span className="font-extrabold text-xl text-slate-900 tracking-tight">
-                Mahol<span className="text-emerald-600">AI</span>
+              
+              <span className="font-black text-2xl text-slate-900 tracking-tight">
+                FixMy<span className="text-emerald-600">City</span>
               </span>
-              <h2 className="text-lg font-bold text-slate-800 mt-1">Citizen Login</h2>
-              <p className="text-xs text-slate-400 font-medium text-center">
-                Login with your CNIC to continue.
+              
+              <h2 className="text-base font-extrabold text-slate-800 mt-1">Citizen Login</h2>
+              <p className="text-xs text-slate-500 font-semibold text-center mt-0.5">
+                Login with your CNIC to continue
               </p>
             </div>
 
             {error && (
-              <div className="bg-red-50 border-l-4 border-red-500 px-3 py-2 mb-5 rounded-xl">
-                <p className="text-red-600 text-xs font-medium">{error}</p>
+              <div className="bg-rose-50 border-l-4 border-rose-500 px-3.5 py-2.5 mb-5 rounded-xl">
+                <p className="text-rose-700 text-xs font-bold">{error}</p>
               </div>
             )}
 
             <form onSubmit={handleSubmit} className="space-y-4">
 
-              {/* CNIC */}
-              <div className="relative">
-                <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 text-sm">🪪</span>
-                <input
-                  type="text"
-                  name="cnic"
-                  autoComplete="off"
-                  value={formData.cnic}
-                  onChange={handleChange}
-                  required
-                  placeholder="CNIC (13 digits)"
-                  className="w-full pl-10 pr-3.5 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-800 placeholder-slate-400 focus:bg-white focus:border-emerald-600 focus:outline-none transition-all"
-                />
+              {/* CNIC Input */}
+              <div className="space-y-1">
+                <label className="text-[11px] font-bold text-slate-700 uppercase tracking-wider block">CNIC Number</label>
+                <div className="relative">
+                  <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-500 text-base">🪪</span>
+                  <input
+                    type="text"
+                    name="cnic"
+                    autoComplete="off"
+                    value={formData.cnic}
+                    onChange={handleChange}
+                    required
+                    placeholder="e.g. 1730112345671"
+                    className="w-full pl-10 pr-3.5 py-3 bg-slate-50 border border-slate-300 rounded-xl text-sm font-semibold text-slate-900 placeholder-slate-400 focus:bg-white focus:border-emerald-600 focus:ring-2 focus:ring-emerald-600/20 focus:outline-none transition-all"
+                  />
+                </div>
               </div>
 
-              {/* Password */}
-              <div className="relative">
-                <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 text-sm">🔒</span>
-                <input
-                  type={showPassword ? 'text' : 'password'}
-                  name="password"
-                  autoComplete="off"
-                  value={formData.password}
-                  onChange={handleChange}
-                  required
-                  placeholder="Password"
-                  className="w-full pl-10 pr-10 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-800 placeholder-slate-400 focus:bg-white focus:border-emerald-600 focus:outline-none transition-all"
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 text-sm bg-transparent border-0 cursor-pointer"
-                >
-                  {showPassword ? '🙈' : '👁️'}
-                </button>
+              {/* Password Input */}
+              <div className="space-y-1">
+                <label className="text-[11px] font-bold text-slate-700 uppercase tracking-wider block">Password</label>
+                <div className="relative">
+                  <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-500 text-base">🔒</span>
+                  <input
+                    type={showPassword ? 'text' : 'password'}
+                    name="password"
+                    autoComplete="off"
+                    value={formData.password}
+                    onChange={handleChange}
+                    required
+                    placeholder="Enter your password"
+                    className="w-full pl-10 pr-10 py-3 bg-slate-50 border border-slate-300 rounded-xl text-sm font-semibold text-slate-900 placeholder-slate-400 focus:bg-white focus:border-emerald-600 focus:ring-2 focus:ring-emerald-600/20 focus:outline-none transition-all"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-800 text-sm bg-transparent border-0 cursor-pointer transition-colors"
+                  >
+                    {showPassword ? '🙈' : '👁️'}
+                  </button>
+                </div>
               </div>
 
               {/* Submit Button */}
               <button
                 type="submit"
                 disabled={loading}
-                className={`w-full py-3.5 rounded-full text-xs font-bold tracking-wider uppercase transition-all border-0 mt-2 ${
+                className={`w-full py-3.5 rounded-xl text-xs font-extrabold tracking-wider uppercase transition-all border-0 mt-3 ${
                   loading
                     ? 'bg-emerald-300 text-white cursor-not-allowed'
-                    : 'bg-emerald-700 hover:bg-emerald-800 text-white cursor-pointer shadow-md shadow-emerald-700/20 active:scale-[0.99]'
+                    : 'bg-emerald-600 hover:bg-emerald-700 text-white cursor-pointer shadow-lg shadow-emerald-600/20 active:scale-[0.99]'
                 }`}
               >
-                {loading ? 'Logging in...' : 'Login'}
+                {loading ? 'Logging in...' : 'Login to Account'}
               </button>
 
             </form>
 
-            <p className="text-center text-slate-500 text-xs mt-6">
+            <p className="text-center text-slate-600 text-xs font-medium mt-6">
               No account?{' '}
-              <Link href="/signup" className="text-emerald-700 font-bold no-underline hover:underline">
+              <Link href="/signup" className="text-emerald-700 font-extrabold no-underline hover:underline">
                 Create Account
               </Link>
             </p>
 
-            <div className="text-center mt-3">
-              <Link href="/" className="text-slate-400 hover:text-emerald-700 text-xs font-medium no-underline transition-colors">
-                ← Back to Home
+            <div className="text-center mt-3 pt-3 border-t border-slate-100">
+              <Link href="/" className="text-slate-500 hover:text-emerald-700 text-xs font-bold no-underline transition-colors">
+                ← Back to Home Page
               </Link>
             </div>
 

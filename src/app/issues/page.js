@@ -152,21 +152,421 @@
 //     </div>
 //   );
 // }
+// 'use client';
+
+// import { useState, useEffect, useMemo } from 'react';
+
+// function getLocationStr(issue) {
+//   if (!issue.location) return issue.location_area ? `${issue.location_area}, ${issue.location_district || ''}` : '—';
+//   if (typeof issue.location === 'string') return issue.location;
+//   const loc = issue.location;
+//   return [loc.area, loc.district].filter(Boolean).join(', ') || '—';
+// }
+
+// export default function AllIssuesPage() {
+//   const [issues, setIssues] = useState([]);
+//   const [loading, setLoading] = useState(true);
+//   const [error, setError] = useState('');
+
+//   // Filters State
+//   const [selectedDistrict, setSelectedDistrict] = useState('ALL');
+//   const [selectedArea, setSelectedArea] = useState('ALL');
+//   const [selectedCategory, setSelectedCategory] = useState('ALL');
+//   const [selectedStatus, setSelectedStatus] = useState('ALL');
+//   const [searchQuery, setSearchQuery] = useState('');
+
+//   // User Default Location
+//   const [myDistrict, setMyDistrict] = useState('');
+//   const [myArea, setMyArea] = useState('');
+
+//   useEffect(() => {
+//     // Localstorage se user ka district/area detect karo
+//     const district = localStorage.getItem('district') || '';
+//     const area = localStorage.getItem('area') || '';
+//     setMyDistrict(district);
+//     setMyArea(area);
+
+//     // Fetch all public issues
+//     fetch('http://localhost:8000/issues', { credentials: 'include' })
+//       .then(async (res) => {
+//         const data = await res.json();
+//         if (!res.ok) throw new Error(data.detail || 'Failed to fetch issues');
+//         return data;
+//       })
+//       .then((data) => {
+//         setIssues(data.data || []);
+//         setLoading(false);
+//       })
+//       .catch((err) => {
+//         setError(err.message);
+//         setLoading(false);
+//       });
+//   }, []);
+
+//   // Status Badges Styling
+//   const statusConfig = {
+//     PENDING:     { bg: '#fef3c7', color: '#b45309', border: '#fcd34d', label: 'Pending', icon: '⏳' },
+//     IN_PROGRESS: { bg: '#dbeafe', color: '#1d4ed8', border: '#93c5fd', label: 'In Progress', icon: '🔄' },
+//     RESOLVED:    { bg: '#dcfce7', color: '#15803d', border: '#86efac', label: 'Resolved', icon: '✅' },
+//     REJECTED:    { bg: '#fee2e2', color: '#b91c1c', border: '#fca5a5', label: 'Rejected', icon: '❌' },
+//   };
+
+//   // Dynamic District & Area Dropdown Options
+//   const districts = useMemo(() => {
+//     const set = new Set(issues.map((i) => i.location_district || i.location?.district).filter(Boolean));
+//     return Array.from(set).sort();
+//   }, [issues]);
+
+//   const areas = useMemo(() => {
+//     const filtered = issues.filter((i) => {
+//       const dist = i.location_district || i.location?.district;
+//       return selectedDistrict === 'ALL' || dist === selectedDistrict;
+//     });
+//     const set = new Set(filtered.map((i) => i.location_area || i.location?.area).filter(Boolean));
+//     return Array.from(set).sort();
+//   }, [issues, selectedDistrict]);
+
+//   // Dynamic Category Dropdown (Case-insensitive unique categories collection)
+//   const categories = useMemo(() => {
+//     const set = new Set(
+//       issues
+//         .map((i) => i.category)
+//         .filter(Boolean)
+//         .map((c) => c.trim())
+//     );
+//     return Array.from(set).sort();
+//   }, [issues]);
+
+//   // Filtering Logic
+//   const filteredIssues = useMemo(() => {
+//     return issues.filter((issue) => {
+//       const issueDist = issue.location_district || issue.location?.district || '';
+//       const issueArea = issue.location_area || issue.location?.area || '';
+//       const issueCategory = issue.category || '';
+
+//       const matchesDistrict = selectedDistrict === 'ALL' || issueDist === selectedDistrict;
+//       const matchesArea = selectedArea === 'ALL' || issueArea === selectedArea;
+//       const matchesCategory = selectedCategory === 'ALL' || issueCategory.toLowerCase() === selectedCategory.toLowerCase();
+//       const matchesStatus = selectedStatus === 'ALL' || issue.status === selectedStatus;
+//       const matchesSearch = issue.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+//                             (issue.summary && issue.summary.toLowerCase().includes(searchQuery.toLowerCase()));
+
+//       return matchesDistrict && matchesArea && matchesCategory && matchesStatus && matchesSearch;
+//     });
+//   }, [issues, selectedDistrict, selectedArea, selectedCategory, selectedStatus, searchQuery]);
+
+//   // Selected Area Specific Stats
+//   const areaStats = useMemo(() => {
+//     if (selectedDistrict === 'ALL' && selectedArea === 'ALL') return null;
+
+//     const total = filteredIssues.length;
+//     const resolved = filteredIssues.filter((i) => i.status === 'RESOLVED').length;
+//     const pending = filteredIssues.filter((i) => i.status === 'PENDING').length;
+//     const inProgress = filteredIssues.filter((i) => i.status === 'IN_PROGRESS').length;
+
+//     return { total, resolved, pending, inProgress };
+//   }, [filteredIssues, selectedDistrict, selectedArea]);
+
+//   const setMyAreaFilter = () => {
+//     if (myDistrict) setSelectedDistrict(myDistrict);
+//     if (myArea) setSelectedArea(myArea);
+//   };
+
+//   const clearFilters = () => {
+//     setSelectedDistrict('ALL');
+//     setSelectedArea('ALL');
+//     setSelectedCategory('ALL');
+//     setSelectedStatus('ALL');
+//     setSearchQuery('');
+//   };
+
+//   return (
+//     <div className="min-h-screen w-full bg-slate-100 text-slate-800 font-sans pb-16">
+      
+//       {/* Dark Forest Green Hero Banner */}
+//       <div className="bg-[#102d21] text-white pt-10 pb-20 px-6 sm:px-10 border-b border-emerald-900/50 relative overflow-hidden">
+//         <div className="max-w-7xl mx-auto flex flex-col md:flex-row justify-between items-start md:items-center gap-6 relative z-10">
+//           <div>
+//             <h1 className="text-3xl sm:text-4xl font-black tracking-tight text-white mb-2">
+//               Public Issues Hub
+//             </h1>
+//             <div className="flex items-center gap-3 flex-wrap">
+//               <p className="text-emerald-100/80 text-sm sm:text-base font-medium">
+//                 Browse, filter, and track community civic reports in real-time.
+//               </p>
+//               <span className="bg-emerald-900/80 text-emerald-300 text-xs font-bold px-3 py-1 rounded-md border border-emerald-700/50">
+//                 Active Alerts: {issues.length}
+//               </span>
+//             </div>
+//           </div>
+
+//           <a 
+//             href="/report" 
+//             className="inline-flex items-center gap-2 bg-emerald-500 hover:bg-emerald-600 text-white px-6 py-3 rounded-2xl font-bold text-sm shadow-lg shadow-emerald-500/20 transition-all no-underline"
+//           >
+//             <span>+</span> Report New Issue
+//           </a>
+//         </div>
+//       </div>
+
+//       {/* Main Container */}
+//       <div className="max-w-7xl mx-auto px-4 sm:px-6">
+        
+//         {/* Floating Glassmorphic Filters Overlapping Banner */}
+//         <div className="bg-white/95 backdrop-blur-md border border-slate-200/80 rounded-3xl p-5 sm:p-6 shadow-xl -mt-10 mb-8 relative z-20">
+          
+//           {/* Top Search Bar & Action Buttons */}
+//           <div className="flex flex-col sm:flex-row gap-3 mb-5">
+//             <div className="relative flex-1">
+//               <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 text-sm">🔍</span>
+//               <input
+//                 type="text"
+//                 placeholder="Search issues by title, keyword, or problem..."
+//                 value={searchQuery}
+//                 onChange={(e) => setSearchQuery(e.target.value)}
+//                 className="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-sm text-slate-800 focus:bg-white focus:border-emerald-600 focus:outline-none transition-all"
+//               />
+//             </div>
+
+//             {myDistrict && (
+//               <button 
+//                 onClick={setMyAreaFilter} 
+//                 className="bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200/80 px-4 py-3 rounded-2xl text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-1.5 whitespace-nowrap"
+//               >
+//                 <span>📍</span> Show My Area ({myDistrict})
+//               </button>
+//             )}
+
+//             {(selectedDistrict !== 'ALL' || selectedArea !== 'ALL' || selectedCategory !== 'ALL' || selectedStatus !== 'ALL' || searchQuery) && (
+//               <button 
+//                 onClick={clearFilters} 
+//                 className="bg-slate-100 hover:bg-slate-200 text-slate-600 px-4 py-3 rounded-2xl text-xs font-semibold transition-all cursor-pointer border-0"
+//               >
+//                 Clear Filters
+//               </button>
+//             )}
+//           </div>
+
+//           {/* Filter Dropdowns Row */}
+//           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            
+//             {/* District Filter */}
+//             <div>
+//               <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">
+//                 City / District
+//               </label>
+//               <select 
+//                 value={selectedDistrict} 
+//                 onChange={(e) => { setSelectedDistrict(e.target.value); setSelectedArea('ALL'); }}
+//                 className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-700 font-semibold focus:outline-none focus:border-emerald-600"
+//               >
+//                 <option value="ALL">All Districts</option>
+//                 {districts.map((d) => <option key={d} value={d}>{d}</option>)}
+//               </select>
+//             </div>
+
+//             {/* Area Filter */}
+//             <div>
+//               <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">
+//                 Local Area
+//               </label>
+//               <select 
+//                 value={selectedArea} 
+//                 onChange={(e) => setSelectedArea(e.target.value)}
+//                 className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-700 font-semibold focus:outline-none focus:border-emerald-600"
+//               >
+//                 <option value="ALL">All Areas</option>
+//                 {areas.map((a) => <option key={a} value={a}>{a}</option>)}
+//               </select>
+//             </div>
+
+//             {/* Category Filter */}
+//             <div>
+//               <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">
+//                 Category / Problem
+//               </label>
+//               <select 
+//                 value={selectedCategory} 
+//                 onChange={(e) => setSelectedCategory(e.target.value)}
+//                 className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-700 font-semibold focus:outline-none focus:border-emerald-600"
+//               >
+//                 <option value="ALL">All Categories</option>
+//                 {categories.map((c) => <option key={c} value={c}>{c}</option>)}
+//               </select>
+//             </div>
+
+//             {/* Status Filter */}
+//             <div>
+//               <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">
+//                 Status
+//               </label>
+//               <select 
+//                 value={selectedStatus} 
+//                 onChange={(e) => setSelectedStatus(e.target.value)}
+//                 className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-700 font-semibold focus:outline-none focus:border-emerald-600"
+//               >
+//                 <option value="ALL">All Statuses</option>
+//                 <option value="PENDING">⏳ Pending</option>
+//                 <option value="IN_PROGRESS">🔄 In Progress</option>
+//                 <option value="RESOLVED">✅ Resolved</option>
+//                 <option value="REJECTED">❌ Rejected</option>
+//               </select>
+//             </div>
+
+//           </div>
+//         </div>
+
+//         {/* Area Stats Bar */}
+//         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-5">
+//           <p className="text-xs font-semibold text-slate-500 m-0">
+//             Showing <span className="text-slate-900 font-bold">{filteredIssues.length}</span> issues
+//           </p>
+
+//           {areaStats && (
+//             <div className="flex items-center gap-2 flex-wrap">
+//               <span className="text-[11px] font-bold bg-slate-200 text-slate-700 px-2.5 py-1 rounded-lg">
+//                 Total: {areaStats.total}
+//               </span>
+//               <span className="text-[11px] font-bold bg-amber-100 text-amber-800 px-2.5 py-1 rounded-lg">
+//                 Pending: {areaStats.pending}
+//               </span>
+//               <span className="text-[11px] font-bold bg-blue-100 text-blue-800 px-2.5 py-1 rounded-lg">
+//                 In Progress: {areaStats.inProgress}
+//               </span>
+//               <span className="text-[11px] font-bold bg-emerald-100 text-emerald-800 px-2.5 py-1 rounded-lg">
+//                 Resolved: {areaStats.resolved}
+//               </span>
+//             </div>
+//           )}
+//         </div>
+
+//         {/* Loading / Error States */}
+//         {loading && <p className="text-center text-slate-500 py-12 text-sm">Loading reported issues...</p>}
+//         {error && <p className="text-center text-red-500 py-12 text-sm">Error loading data: {error}</p>}
+
+//         {/* Empty State */}
+//         {!loading && !error && filteredIssues.length === 0 && (
+//           <div className="text-center py-16 bg-white rounded-3xl border border-dashed border-slate-300">
+//             <p className="text-4xl mb-2">🔍</p>
+//             <h3 className="text-base font-bold text-slate-800">No issues found</h3>
+//             <p className="text-xs text-slate-500 mt-1">Try adjusting your category, area, or status filters.</p>
+//           </div>
+//         )}
+
+//         {/* Issues Grid Display */}
+//         {!loading && !error && (
+//           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+//             {filteredIssues.map((issue) => {
+//               const status = statusConfig[issue.status] || statusConfig.PENDING;
+              
+//               // Dynamic Picture Auto-Detection
+//               const issueImg = issue.image || issue.image_url || issue.picture || issue.media || (Array.isArray(issue.photos) ? issue.photos[0] : null);
+
+//               // Multi-Report Counter Logic
+//               const reportCount = 
+//                 issue.reports_count ?? 
+//                 issue.report_count ?? 
+//                 issue.reported_by_count ?? 
+//                 issue.duplicate_count ??
+//                 (Array.isArray(issue.reports) ? issue.reports.length : undefined) ?? 
+//                 (Array.isArray(issue.reported_by) ? issue.reported_by.length : undefined) ?? 
+//                 (Array.isArray(issue.user_ids) ? issue.user_ids.length : 1);
+
+//               return (
+//                 <div key={issue._id} className="bg-white border border-slate-200/90 rounded-2xl p-4 h-full flex flex-col justify-between hover:shadow-md transition-all duration-200">
+                  
+//                   <div>
+//                     {/* Top Badges Bar */}
+//                     <div className="flex items-center justify-between gap-2 mb-3">
+//                       {issue.category ? (
+//                         <span className="text-[10px] font-extrabold uppercase px-2.5 py-1 rounded-md bg-slate-100 text-slate-700 tracking-wider">
+//                           {issue.category}
+//                         </span>
+//                       ) : <div />}
+                      
+//                       <span 
+//                         className="text-[10px] font-bold px-2.5 py-1 rounded-full flex items-center gap-1 border"
+//                         style={{ color: status.color, backgroundColor: status.bg, borderColor: status.border }}
+//                       >
+//                         <span>{status.icon}</span> {status.label}
+//                       </span>
+//                     </div>
+
+//                     {/* Fixed Height Suitable Image Preview */}
+//                     {issueImg && (
+//                       <div className="w-full h-40 mb-3 rounded-xl overflow-hidden bg-slate-100 border border-slate-100 relative">
+//                         <img 
+//                           src={issueImg} 
+//                           alt={issue.title}
+//                           className="w-full h-full object-cover" 
+//                         />
+//                       </div>
+//                     )}
+
+//                     {/* Title & Summary */}
+//                     <h3 className="text-sm font-bold text-slate-900 leading-snug mb-1 line-clamp-2">
+//                       {issue.title}
+//                     </h3>
+                    
+//                     {issue.summary && (
+//                       <p className="text-xs text-slate-500 leading-relaxed mb-3 line-clamp-2 font-normal">
+//                         {issue.summary}
+//                       </p>
+//                     )}
+//                   </div>
+
+//                   {/* Clean Footer: Location & Accurate Reported Count */}
+//                   <div className="pt-3 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500 mt-2">
+//                     <div className="flex items-center gap-1 overflow-hidden pr-2">
+//                       <span>📍</span>
+//                       <span className="font-medium truncate text-[11px]">
+//                         {getLocationStr(issue)}
+//                       </span>
+//                     </div>
+
+//                     {/* Dynamic Reported Count Badge */}
+//                     <span className="text-[11px] font-semibold text-slate-700 bg-slate-100 px-2 py-0.5 rounded-md whitespace-nowrap border border-slate-200/60">
+//                       👥 Reported by {reportCount} {reportCount === 1 ? 'person' : 'people'}
+//                     </span>
+//                   </div>
+
+//                 </div>
+//               );
+//             })}
+//           </div>
+//         )}
+
+//       </div>
+//     </div>
+//   );
+// }
+
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
 
+// Backend Image URL Formatter (Fixes 404 Error)
+const getImageUrl = (url) => {
+  if (!url) return null;
+  if (url.startsWith('http://') || url.startsWith('https://')) return url;
+  return `http://localhost:8000${url.startsWith('/') ? '' : '/'}${url}`;
+};
+
 function getLocationStr(issue) {
-  if (!issue.location) return issue.location_area ? `${issue.location_area}, ${issue.location_district || ''}` : '—';
-  if (typeof issue.location === 'string') return issue.location;
-  const loc = issue.location;
-  return [loc.area, loc.district].filter(Boolean).join(', ') || '—';
+  if (!issue) return '—';
+  if (issue.location && typeof issue.location === 'object') {
+    return [issue.location.area, issue.location.district].filter(Boolean).join(', ') || '—';
+  }
+  return [issue.location_area, issue.location_district].filter(Boolean).join(', ') || issue.location || '—';
 }
 
 export default function AllIssuesPage() {
   const [issues, setIssues] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+
+  // Interactive Popup Modal State
+  const [selectedIssue, setSelectedIssue] = useState(null);
 
   // Filters State
   const [selectedDistrict, setSelectedDistrict] = useState('ALL');
@@ -180,13 +580,11 @@ export default function AllIssuesPage() {
   const [myArea, setMyArea] = useState('');
 
   useEffect(() => {
-    // Localstorage se user ka district/area detect karo
     const district = localStorage.getItem('district') || '';
     const area = localStorage.getItem('area') || '';
     setMyDistrict(district);
     setMyArea(area);
 
-    // Fetch all public issues
     fetch('http://localhost:8000/issues', { credentials: 'include' })
       .then(async (res) => {
         const data = await res.json();
@@ -194,7 +592,8 @@ export default function AllIssuesPage() {
         return data;
       })
       .then((data) => {
-        setIssues(data.data || []);
+        const issueList = Array.isArray(data) ? data : (data.data || data.issues || []);
+        setIssues(issueList);
         setLoading(false);
       })
       .catch((err) => {
@@ -203,7 +602,6 @@ export default function AllIssuesPage() {
       });
   }, []);
 
-  // Status Badges Styling
   const statusConfig = {
     PENDING:     { bg: '#fef3c7', color: '#b45309', border: '#fcd34d', label: 'Pending', icon: '⏳' },
     IN_PROGRESS: { bg: '#dbeafe', color: '#1d4ed8', border: '#93c5fd', label: 'In Progress', icon: '🔄' },
@@ -211,22 +609,23 @@ export default function AllIssuesPage() {
     REJECTED:    { bg: '#fee2e2', color: '#b91c1c', border: '#fca5a5', label: 'Rejected', icon: '❌' },
   };
 
-  // Dynamic District & Area Dropdown Options
+  // Dynamic Extract Districts (Swabi, Nowshera, etc.)
   const districts = useMemo(() => {
-    const set = new Set(issues.map((i) => i.location_district || i.location?.district).filter(Boolean));
+    const set = new Set(issues.map((i) => i.location?.district || i.location_district).filter(Boolean));
     return Array.from(set).sort();
   }, [issues]);
 
+  // Dynamic Extract Areas
   const areas = useMemo(() => {
     const filtered = issues.filter((i) => {
-      const dist = i.location_district || i.location?.district;
+      const dist = i.location?.district || i.location_district;
       return selectedDistrict === 'ALL' || dist === selectedDistrict;
     });
-    const set = new Set(filtered.map((i) => i.location_area || i.location?.area).filter(Boolean));
+    const set = new Set(filtered.map((i) => i.location?.area || i.location_area).filter(Boolean));
     return Array.from(set).sort();
   }, [issues, selectedDistrict]);
 
-  // Dynamic Category Dropdown (Case-insensitive unique categories collection)
+  // Dynamic Extract Categories
   const categories = useMemo(() => {
     const set = new Set(
       issues
@@ -237,40 +636,23 @@ export default function AllIssuesPage() {
     return Array.from(set).sort();
   }, [issues]);
 
-  // Filtering Logic
+  // Filter Issues
   const filteredIssues = useMemo(() => {
     return issues.filter((issue) => {
-      const issueDist = issue.location_district || issue.location?.district || '';
-      const issueArea = issue.location_area || issue.location?.area || '';
+      const issueDist = issue.location?.district || issue.location_district || '';
+      const issueArea = issue.location?.area || issue.location_area || '';
       const issueCategory = issue.category || '';
 
       const matchesDistrict = selectedDistrict === 'ALL' || issueDist === selectedDistrict;
       const matchesArea = selectedArea === 'ALL' || issueArea === selectedArea;
       const matchesCategory = selectedCategory === 'ALL' || issueCategory.toLowerCase() === selectedCategory.toLowerCase();
-      const matchesStatus = selectedStatus === 'ALL' || issue.status === selectedStatus;
-      const matchesSearch = issue.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                            (issue.summary && issue.summary.toLowerCase().includes(searchQuery.toLowerCase()));
+      const matchesStatus = selectedStatus === 'ALL' || (issue.status && issue.status.toUpperCase() === selectedStatus.toUpperCase());
+      const matchesSearch = (issue.title && issue.title.toLowerCase().includes(searchQuery.toLowerCase())) ||
+                            (issue.description && issue.description.toLowerCase().includes(searchQuery.toLowerCase()));
 
       return matchesDistrict && matchesArea && matchesCategory && matchesStatus && matchesSearch;
     });
   }, [issues, selectedDistrict, selectedArea, selectedCategory, selectedStatus, searchQuery]);
-
-  // Selected Area Specific Stats
-  const areaStats = useMemo(() => {
-    if (selectedDistrict === 'ALL' && selectedArea === 'ALL') return null;
-
-    const total = filteredIssues.length;
-    const resolved = filteredIssues.filter((i) => i.status === 'RESOLVED').length;
-    const pending = filteredIssues.filter((i) => i.status === 'PENDING').length;
-    const inProgress = filteredIssues.filter((i) => i.status === 'IN_PROGRESS').length;
-
-    return { total, resolved, pending, inProgress };
-  }, [filteredIssues, selectedDistrict, selectedArea]);
-
-  const setMyAreaFilter = () => {
-    if (myDistrict) setSelectedDistrict(myDistrict);
-    if (myArea) setSelectedArea(myArea);
-  };
 
   const clearFilters = () => {
     setSelectedDistrict('ALL');
@@ -281,255 +663,198 @@ export default function AllIssuesPage() {
   };
 
   return (
-    <div className="min-h-screen w-full bg-slate-100 text-slate-800 font-sans pb-16">
+    <div className="min-h-screen w-full bg-[#f4fbf7] text-slate-800 font-sans pb-16">
       
-      {/* Dark Forest Green Hero Banner */}
-      <div className="bg-[#102d21] text-white pt-10 pb-20 px-6 sm:px-10 border-b border-emerald-900/50 relative overflow-hidden">
-        <div className="max-w-7xl mx-auto flex flex-col md:flex-row justify-between items-start md:items-center gap-6 relative z-10">
+      {/* Full Screen Banner Header */}
+      <div className="w-full bg-gradient-to-r from-emerald-800 via-emerald-700 to-green-800 text-white pt-10 pb-20 px-6 sm:px-12 border-b border-emerald-900/40">
+        <div className="w-full flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
           <div>
-            <h1 className="text-3xl sm:text-4xl font-black tracking-tight text-white mb-2">
-              Public Issues Hub
+            <h1 className="text-3xl sm:text-4xl font-extrabold tracking-tight text-white mb-2">
+              Public Civic Hub
             </h1>
-            <div className="flex items-center gap-3 flex-wrap">
-              <p className="text-emerald-100/80 text-sm sm:text-base font-medium">
-                Browse, filter, and track community civic reports in real-time.
-              </p>
-              <span className="bg-emerald-900/80 text-emerald-300 text-xs font-bold px-3 py-1 rounded-md border border-emerald-700/50">
-                Active Alerts: {issues.length}
-              </span>
-            </div>
+            <p className="text-emerald-100/90 text-sm sm:text-base font-medium">
+              Real-time civic complaints & issues system.
+            </p>
           </div>
 
           <a 
             href="/report" 
-            className="inline-flex items-center gap-2 bg-emerald-500 hover:bg-emerald-600 text-white px-6 py-3 rounded-2xl font-bold text-sm shadow-lg shadow-emerald-500/20 transition-all no-underline"
+            className="inline-flex items-center gap-2 bg-emerald-500 hover:bg-emerald-600 text-white px-6 py-3 rounded-2xl font-bold text-sm shadow-xl transition-all no-underline"
           >
-            <span>+</span> Report New Issue
+            + Report New Issue
           </a>
         </div>
       </div>
 
-      {/* Main Container */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6">
+      {/* Main Container - Fully Expanded Width */}
+      <div className="w-full px-6 sm:px-12">
         
-        {/* Floating Glassmorphic Filters Overlapping Banner */}
-        <div className="bg-white/95 backdrop-blur-md border border-slate-200/80 rounded-3xl p-5 sm:p-6 shadow-xl -mt-10 mb-8 relative z-20">
+        {/* Dynamic Filters Bar */}
+        <div className="bg-white/95 backdrop-blur-md border border-emerald-100 rounded-3xl p-6 shadow-xl -mt-10 mb-8 relative z-20">
           
-          {/* Top Search Bar & Action Buttons */}
           <div className="flex flex-col sm:flex-row gap-3 mb-5">
             <div className="relative flex-1">
               <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 text-sm">🔍</span>
               <input
                 type="text"
-                placeholder="Search issues by title, keyword, or problem..."
+                placeholder="Search issues by title or description..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-sm text-slate-800 focus:bg-white focus:border-emerald-600 focus:outline-none transition-all"
+                className="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-sm text-slate-800 focus:outline-none focus:border-emerald-600"
               />
             </div>
-
-            {myDistrict && (
-              <button 
-                onClick={setMyAreaFilter} 
-                className="bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200/80 px-4 py-3 rounded-2xl text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-1.5 whitespace-nowrap"
-              >
-                <span>📍</span> Show My Area ({myDistrict})
-              </button>
-            )}
 
             {(selectedDistrict !== 'ALL' || selectedArea !== 'ALL' || selectedCategory !== 'ALL' || selectedStatus !== 'ALL' || searchQuery) && (
               <button 
                 onClick={clearFilters} 
-                className="bg-slate-100 hover:bg-slate-200 text-slate-600 px-4 py-3 rounded-2xl text-xs font-semibold transition-all cursor-pointer border-0"
+                className="bg-slate-100 hover:bg-slate-200 text-slate-600 px-4 py-3 rounded-2xl text-xs font-semibold cursor-pointer border-0"
               >
-                Clear Filters
+                Reset Filters
               </button>
             )}
           </div>
 
-          {/* Filter Dropdowns Row */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             
-            {/* District Filter */}
+            {/* District Dropdown */}
             <div>
-              <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">
-                City / District
+              <label className="block text-[10px] font-extrabold text-emerald-900/70 uppercase tracking-wider mb-1.5">
+                District / City
               </label>
               <select 
                 value={selectedDistrict} 
                 onChange={(e) => { setSelectedDistrict(e.target.value); setSelectedArea('ALL'); }}
-                className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-700 font-semibold focus:outline-none focus:border-emerald-600"
+                className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-700"
               >
-                <option value="ALL">All Districts</option>
+                <option value="ALL">All Districts ({districts.length})</option>
                 {districts.map((d) => <option key={d} value={d}>{d}</option>)}
               </select>
             </div>
 
-            {/* Area Filter */}
+            {/* Area Dropdown */}
             <div>
-              <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">
-                Local Area
+              <label className="block text-[10px] font-extrabold text-emerald-900/70 uppercase tracking-wider mb-1.5">
+                Area / Town
               </label>
               <select 
                 value={selectedArea} 
                 onChange={(e) => setSelectedArea(e.target.value)}
-                className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-700 font-semibold focus:outline-none focus:border-emerald-600"
+                className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-700"
               >
-                <option value="ALL">All Areas</option>
+                <option value="ALL">All Areas ({areas.length})</option>
                 {areas.map((a) => <option key={a} value={a}>{a}</option>)}
               </select>
             </div>
 
-            {/* Category Filter */}
+            {/* Category Dropdown */}
             <div>
-              <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">
-                Category / Problem
+              <label className="block text-[10px] font-extrabold text-emerald-900/70 uppercase tracking-wider mb-1.5">
+                Category
               </label>
               <select 
                 value={selectedCategory} 
                 onChange={(e) => setSelectedCategory(e.target.value)}
-                className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-700 font-semibold focus:outline-none focus:border-emerald-600"
+                className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-700"
               >
-                <option value="ALL">All Categories</option>
+                <option value="ALL">All Categories ({categories.length})</option>
                 {categories.map((c) => <option key={c} value={c}>{c}</option>)}
               </select>
             </div>
 
-            {/* Status Filter */}
+            {/* Status Dropdown */}
             <div>
-              <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">
+              <label className="block text-[10px] font-extrabold text-emerald-900/70 uppercase tracking-wider mb-1.5">
                 Status
               </label>
               <select 
                 value={selectedStatus} 
                 onChange={(e) => setSelectedStatus(e.target.value)}
-                className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-700 font-semibold focus:outline-none focus:border-emerald-600"
+                className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-700"
               >
                 <option value="ALL">All Statuses</option>
                 <option value="PENDING">⏳ Pending</option>
                 <option value="IN_PROGRESS">🔄 In Progress</option>
                 <option value="RESOLVED">✅ Resolved</option>
-                <option value="REJECTED">❌ Rejected</option>
               </select>
             </div>
 
           </div>
         </div>
 
-        {/* Area Stats Bar */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-5">
-          <p className="text-xs font-semibold text-slate-500 m-0">
-            Showing <span className="text-slate-900 font-bold">{filteredIssues.length}</span> issues
-          </p>
-
-          {areaStats && (
-            <div className="flex items-center gap-2 flex-wrap">
-              <span className="text-[11px] font-bold bg-slate-200 text-slate-700 px-2.5 py-1 rounded-lg">
-                Total: {areaStats.total}
-              </span>
-              <span className="text-[11px] font-bold bg-amber-100 text-amber-800 px-2.5 py-1 rounded-lg">
-                Pending: {areaStats.pending}
-              </span>
-              <span className="text-[11px] font-bold bg-blue-100 text-blue-800 px-2.5 py-1 rounded-lg">
-                In Progress: {areaStats.inProgress}
-              </span>
-              <span className="text-[11px] font-bold bg-emerald-100 text-emerald-800 px-2.5 py-1 rounded-lg">
-                Resolved: {areaStats.resolved}
-              </span>
-            </div>
-          )}
-        </div>
-
         {/* Loading / Error States */}
-        {loading && <p className="text-center text-slate-500 py-12 text-sm">Loading reported issues...</p>}
-        {error && <p className="text-center text-red-500 py-12 text-sm">Error loading data: {error}</p>}
+        {loading && <p className="text-center py-12 text-slate-500 font-bold">Loading issues...</p>}
+        {error && <p className="text-center py-12 text-red-500 font-bold">Error: {error}</p>}
 
-        {/* Empty State */}
-        {!loading && !error && filteredIssues.length === 0 && (
-          <div className="text-center py-16 bg-white rounded-3xl border border-dashed border-slate-300">
-            <p className="text-4xl mb-2">🔍</p>
-            <h3 className="text-base font-bold text-slate-800">No issues found</h3>
-            <p className="text-xs text-slate-500 mt-1">Try adjusting your category, area, or status filters.</p>
-          </div>
-        )}
-
-        {/* Issues Grid Display */}
+        {/* Issue Cards Grid */}
         {!loading && !error && (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
-            {filteredIssues.map((issue) => {
-              const status = statusConfig[issue.status] || statusConfig.PENDING;
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+            {filteredIssues.map((issue, idx) => {
+              const currentStatus = (issue.status || 'PENDING').toUpperCase();
+              const status = statusConfig[currentStatus] || statusConfig.PENDING;
               
-              // Dynamic Picture Auto-Detection
-              const issueImg = issue.image || issue.image_url || issue.picture || issue.media || (Array.isArray(issue.photos) ? issue.photos[0] : null);
+              // Backend URL prepend for image fix
+              const rawImage = issue.photo_url || issue.image || issue.image_url;
+              const imageUrl = getImageUrl(rawImage);
 
-              // Multi-Report Counter Logic
-              const reportCount = 
-                issue.reports_count ?? 
-                issue.report_count ?? 
-                issue.reported_by_count ?? 
-                issue.duplicate_count ??
-                (Array.isArray(issue.reports) ? issue.reports.length : undefined) ?? 
-                (Array.isArray(issue.reported_by) ? issue.reported_by.length : undefined) ?? 
-                (Array.isArray(issue.user_ids) ? issue.user_ids.length : 1);
+              const count = issue.report_count ?? (Array.isArray(issue.reported_by) ? issue.reported_by.length : 1);
 
               return (
-                <div key={issue._id} className="bg-white border border-slate-200/90 rounded-2xl p-4 h-full flex flex-col justify-between hover:shadow-md transition-all duration-200">
-                  
+                <div 
+                  key={issue._id || issue.id || idx} 
+                  onClick={() => setSelectedIssue(issue)}
+                  className="bg-white border border-emerald-100 rounded-2xl p-4 flex flex-col justify-between hover:shadow-xl hover:border-emerald-300 transition-all cursor-pointer"
+                >
                   <div>
-                    {/* Top Badges Bar */}
                     <div className="flex items-center justify-between gap-2 mb-3">
-                      {issue.category ? (
-                        <span className="text-[10px] font-extrabold uppercase px-2.5 py-1 rounded-md bg-slate-100 text-slate-700 tracking-wider">
-                          {issue.category}
-                        </span>
-                      ) : <div />}
+                      <span className="text-[10px] font-extrabold uppercase px-2.5 py-1 rounded-md bg-emerald-50 text-emerald-800 tracking-wider border border-emerald-200">
+                        {issue.category || 'General'}
+                      </span>
                       
                       <span 
-                        className="text-[10px] font-bold px-2.5 py-1 rounded-full flex items-center gap-1 border"
+                        className="text-[10px] font-bold px-2.5 py-1 rounded-full border"
                         style={{ color: status.color, backgroundColor: status.bg, borderColor: status.border }}
                       >
-                        <span>{status.icon}</span> {status.label}
+                        {status.icon} {status.label}
                       </span>
                     </div>
 
-                    {/* Fixed Height Suitable Image Preview */}
-                    {issueImg && (
-                      <div className="w-full h-40 mb-3 rounded-xl overflow-hidden bg-slate-100 border border-slate-100 relative">
+                    {/* Image Render with Backend Path */}
+                    {imageUrl ? (
+                      <div className="w-full h-44 mb-3 rounded-xl overflow-hidden bg-slate-100 relative border border-slate-100">
                         <img 
-                          src={issueImg} 
+                          src={imageUrl} 
                           alt={issue.title}
-                          className="w-full h-full object-cover" 
+                          className="w-full h-full object-cover"
+                          onError={(e) => {
+                            e.currentTarget.style.display = 'none';
+                            e.currentTarget.parentElement.innerHTML = '<div class="w-full h-full flex items-center justify-center text-3xl text-emerald-600/40">🏙️</div>';
+                          }}
                         />
+                      </div>
+                    ) : (
+                      <div className="w-full h-36 mb-3 rounded-xl bg-emerald-50/60 border border-emerald-100 flex items-center justify-center text-emerald-700/40 text-3xl">
+                        🏙️
                       </div>
                     )}
 
-                    {/* Title & Summary */}
-                    <h3 className="text-sm font-bold text-slate-900 leading-snug mb-1 line-clamp-2">
+                    <h3 className="text-sm font-bold text-slate-900 leading-snug mb-1.5 line-clamp-2">
                       {issue.title}
                     </h3>
                     
-                    {issue.summary && (
-                      <p className="text-xs text-slate-500 leading-relaxed mb-3 line-clamp-2 font-normal">
-                        {issue.summary}
-                      </p>
-                    )}
+                    <p className="text-xs text-slate-500 leading-relaxed mb-3 line-clamp-2">
+                      {issue.description || 'No description provided.'}
+                    </p>
                   </div>
 
-                  {/* Clean Footer: Location & Accurate Reported Count */}
-                  <div className="pt-3 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500 mt-2">
-                    <div className="flex items-center gap-1 overflow-hidden pr-2">
-                      <span>📍</span>
-                      <span className="font-medium truncate text-[11px]">
-                        {getLocationStr(issue)}
-                      </span>
-                    </div>
+                  <div className="pt-3 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500">
+                    <span className="font-medium truncate text-[11px] text-slate-700">
+                      📍 {getLocationStr(issue)}
+                    </span>
 
-                    {/* Dynamic Reported Count Badge */}
-                    <span className="text-[11px] font-semibold text-slate-700 bg-slate-100 px-2 py-0.5 rounded-md whitespace-nowrap border border-slate-200/60">
-                      👥 Reported by {reportCount} {reportCount === 1 ? 'person' : 'people'}
+                    <span className="text-[10px] font-bold text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200">
+                      👥 {count} Reports
                     </span>
                   </div>
-
                 </div>
               );
             })}
@@ -537,6 +862,41 @@ export default function AllIssuesPage() {
         )}
 
       </div>
+
+      {/* Modal Popup for Details */}
+      {selectedIssue && (
+        <div onClick={() => setSelectedIssue(null)} className="fixed inset-0 z-50 bg-slate-900/70 backdrop-blur-sm flex items-center justify-center p-4">
+          <div onClick={(e) => e.stopPropagation()} className="bg-white rounded-3xl w-full max-w-2xl max-h-[90vh] overflow-y-auto p-6 sm:p-8 shadow-2xl relative">
+            
+            <div className="flex justify-between items-start gap-4 mb-4">
+              <div>
+                <span className="text-[10px] font-extrabold uppercase px-2.5 py-1 rounded-md bg-emerald-100 text-emerald-800 mb-2 inline-block">
+                  {selectedIssue.category}
+                </span>
+                <h2 className="text-xl font-bold text-slate-900">{selectedIssue.title}</h2>
+              </div>
+              <button onClick={() => setSelectedIssue(null)} className="bg-slate-100 text-slate-500 w-8 h-8 rounded-full font-bold cursor-pointer border-0">✕</button>
+            </div>
+
+            {getImageUrl(selectedIssue.photo_url || selectedIssue.image) && (
+              <div className="w-full h-64 sm:h-80 rounded-2xl overflow-hidden bg-slate-100 mb-5">
+                <img src={getImageUrl(selectedIssue.photo_url || selectedIssue.image)} alt={selectedIssue.title} className="w-full h-full object-cover" />
+              </div>
+            )}
+
+            <p className="text-sm text-slate-700 bg-slate-50 p-4 rounded-2xl border border-slate-200 mb-4">
+              {selectedIssue.description || 'No description available.'}
+            </p>
+
+            <p className="text-xs font-bold text-emerald-900">📍 Location: {getLocationStr(selectedIssue)}</p>
+
+            <button onClick={() => setSelectedIssue(null)} className="w-full mt-6 bg-emerald-600 text-white font-bold py-3 rounded-2xl cursor-pointer border-0">
+              Close Window
+            </button>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }
