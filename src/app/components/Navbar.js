@@ -272,20 +272,38 @@ export default function Navbar() {
   }, []);
 
   // Backend se user ki wo issues load karna jo verification ke liye ready hain
-  const fetchPendingVerifications = async () => {
-    try {
-      const backendUrl = getBackendUrl();
-      const res = await axios.get(`${backendUrl}/issues/my-issues`, { withCredentials: true });
+//   const fetchPendingVerifications = async () => {
+//     try {
+//       const backendUrl = getBackendUrl();
+//       // const res = await axios.get(`${backendUrl}/issues/my-issues`, { withCredentials: true });
+//       const userId = localStorage.getItem('user_id');
+// if (!userId) return;
+// const res = await axios.get(`${backendUrl}/issues/user/${userId}`, { withCredentials: true });
       
-      // Verification screen ke liye eligible status: RESOLUTION_SUBMITTED
-      const unresolvedList = res.data.filter(
-        (issue) => issue.status === 'RESOLUTION_SUBMITTED'
-      );
-      setPendingVerifications(unresolvedList);
-    } catch (err) {
-      console.error('Failed to load notification items:', err);
-    }
-  };
+//       // Verification screen ke liye eligible status: RESOLUTION_SUBMITTED
+//       const unresolvedList = res.data.filter(
+//         (issue) => issue.status === 'RESOLUTION_SUBMITTED'
+//       );
+//       setPendingVerifications(unresolvedList);
+//     } catch (err) {
+//       console.error('Failed to load notification items:', err);
+//     }
+//   };
+const fetchPendingVerifications = async () => {
+  try {
+    const backendUrl = getBackendUrl();
+    const userId = localStorage.getItem('user_id');
+    if (!userId) return;
+
+    const res = await axios.get(`${backendUrl}/issues/user/${userId}`, { withCredentials: true });
+    const unresolvedList = (res.data.data || []).filter(
+      (issue) => issue.status === 'RESOLUTION_SUBMITTED'
+    );
+    setPendingVerifications(unresolvedList);
+  } catch (err) {
+    console.error('Failed to load notification items:', err);
+  }
+};
 
   // Notification Icon Click Handler
   const handleNotificationClick = () => {

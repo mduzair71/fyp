@@ -409,7 +409,8 @@ const handleReactivateIssue = async (issueId) => {
                       <p className="text-xs text-slate-500 flex flex-wrap items-center gap-2">
                         <span className="flex items-center gap-1 font-medium text-slate-700">
                           <MapPinIcon className="w-3.5 h-3.5 text-slate-400" />
-                          {issue.location_area}, {issue.location_district}
+                          {issue.location?.area || issue.location_area || 'N/A'}, {issue.location?.district || issue.location_district || 'N/A'}
+                          {/* {issue.location_area}, {issue.location_district} */}
                         </span>
                         {issue.landmark && (
                           <span className="bg-slate-100 px-2 py-0.5 rounded-md text-[11px] text-slate-600 font-medium border border-slate-200">
@@ -579,7 +580,10 @@ const handleReactivateIssue = async (issueId) => {
                   <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-0.5 flex items-center gap-1">
                     <MapPinIcon className="w-3.5 h-3.5" /> Area / Location
                   </p>
-                  <p className="text-slate-900 font-medium">{selectedIssue.location_area}, {selectedIssue.location_district}</p>
+                  <p className="text-slate-900 font-medium">
+  {selectedIssue.location?.area || selectedIssue.location_area || 'N/A'}, {selectedIssue.location?.district || selectedIssue.location_district || 'N/A'}
+</p>
+                  {/* <p className="text-slate-900 font-medium">{selectedIssue.location_area}, {selectedIssue.location_district}</p> */}
                 </div>
                 <div>
                   <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-0.5">Current Status</p>
